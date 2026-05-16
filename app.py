@@ -484,7 +484,7 @@ with sub_loan:
         )
         fig.update_yaxes(title_text="當年現金流出（萬）", secondary_y=False)
         fig.update_yaxes(title_text="剩餘本金（萬）", secondary_y=True)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         with st.expander("📑 完整逐月攤還表（前 24 期預覽）"):
             st.dataframe(
@@ -496,7 +496,7 @@ with sub_loan:
                         "剩餘本金": lambda x: fmt_wan(x),
                     }
                 ),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
     else:
@@ -539,12 +539,12 @@ with sub_loan:
             height=400,
             margin=dict(t=20, b=40),
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
         st.dataframe(
             df_rate.style.format(
                 {"新月付金": lambda x: fmt_wan(x), "月付增加": lambda x: fmt_wan(x), "佔月收入比": "{:.1%}"}
             ),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -609,7 +609,7 @@ with sub_cash:
         height=380,
         margin=dict(t=20, b=40),
     )
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, width="stretch")
 
     st.markdown("##### 📈 累積現金流（30 年期）")
     years_range = list(range(1, int(loan_years) + 1))
@@ -641,7 +641,7 @@ with sub_cash:
         height=400,
         margin=dict(t=20, b=40),
     )
-    st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(fig4, width="stretch")
 
     # 個人負債比 + 反推所需月收入（5f74150 邏輯）
     st.markdown("---")
@@ -739,7 +739,7 @@ with sub_invest:
         margin=dict(t=20, b=40),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    st.plotly_chart(fig5, use_container_width=True)
+    st.plotly_chart(fig5, width="stretch")
 
     df_price = pd.DataFrame(
         {
@@ -749,7 +749,7 @@ with sub_invest:
             "悲觀(2.0%)": [f"{fmt_wan(v)}" for v in pessimistic],
         }
     )
-    st.dataframe(df_price, use_container_width=True, hide_index=True)
+    st.dataframe(df_price, width="stretch", hide_index=True)
 
 
 # ======================================================
@@ -816,7 +816,7 @@ with sub_risk:
         height=360,
         margin=dict(t=20, b=40),
     )
-    st.plotly_chart(fig6, use_container_width=True)
+    st.plotly_chart(fig6, width="stretch")
 
     df_rs_display = df_rs.copy()
     df_rs_display["新利率"] = df_rs_display["新利率"].apply(lambda x: f"{x * 100:.2f}%")
@@ -824,7 +824,7 @@ with sub_risk:
         df_rs_display.style.format(
             {"新月付金": lambda x: fmt_wan(x), "增加金額": lambda x: fmt_wan(x)}
         ),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -860,10 +860,10 @@ with sub_risk:
         height=360,
         margin=dict(t=20, b=40),
     )
-    st.plotly_chart(fig7, use_container_width=True)
+    st.plotly_chart(fig7, width="stretch")
     st.dataframe(
         df_inc.style.format({"新月收入": lambda x: fmt_wan(x), "新月現金流": lambda x: fmt_wan(x)}),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -914,7 +914,7 @@ with sub_lazy:
         )
     )
     fig8.update_layout(height=320, margin=dict(t=40, b=20))
-    st.plotly_chart(fig8, use_container_width=True)
+    st.plotly_chart(fig8, width="stretch")
 
     if safety_index >= 1.2 and rent >= breakeven_rent:
         st.success(
@@ -1015,7 +1015,7 @@ with tab_presale:
             )
         )
         fig_gauge.update_layout(height=260, margin=dict(t=40, b=20))
-        st.plotly_chart(fig_gauge, use_container_width=True)
+        st.plotly_chart(fig_gauge, width="stretch")
 
     st.progress(potential_score / 100, text=f"增值潛力指數：{potential_score} / 100")
 
@@ -1793,7 +1793,7 @@ with sub_price:
         height=380,
         margin=dict(t=30, b=40),
     )
-    st.plotly_chart(fig_price, use_container_width=True)
+    st.plotly_chart(fig_price, width="stretch")
 
 
 # ======================================================
@@ -1870,7 +1870,7 @@ with sub_tenant:
             )
         )
         fig_tenant.update_layout(height=260, margin=dict(t=40, b=20))
-        st.plotly_chart(fig_tenant, use_container_width=True)
+        st.plotly_chart(fig_tenant, width="stretch")
 
     if tenant_score < 75:
         st.warning(
