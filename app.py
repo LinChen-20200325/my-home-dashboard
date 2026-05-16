@@ -83,14 +83,53 @@ with st.sidebar:
         age = st.number_input("目前年齡", 18, 80, 30, 1)
         loan_years = st.number_input("預計申請貸款年限（年）", 10, 40, 30, 5)
 
-    with st.expander("💵 收支金流", expanded=True):
-        monthly_income = st.number_input("每月總收入", 0, value=60_000, step=1_000)
-        annual_bonus = st.number_input("每年獎金（年終、季獎）", 0, value=120_000, step=10_000)
-        other_income = st.number_input("每月其他收入（兼職/投資）", 0, value=0, step=1_000)
-        monthly_bad_debt = st.number_input(
-            "每月壞債支出（信貸/車貸/卡循）", 0, value=10_000, step=1_000,
+    with st.expander("💰 每月收入", expanded=True):
+        st.caption("三項收入分開填寫，系統會自動加總（獎金÷12 均攤回每月），請勿重複計入。")
+        monthly_salary = st.number_input(
+            "① 每月本薪（稅後實領，不含獎金）",
+            0,
+            value=60_000,
+            step=1_000,
+            help="勞動所得的固定月薪，已扣除勞健保、稅款後的『實領金額』；不要把年終、季獎、加班費塞進來。",
         )
-        monthly_living = st.number_input("每月生活開銷（含保險娛樂）", 0, value=25_000, step=1_000)
+        annual_bonus = st.number_input(
+            "② 每年獎金（年終、季獎、績效獎金總和）",
+            0,
+            value=120_000,
+            step=10_000,
+            help="一整年所有非固定的獎金加總（年終 + 季獎 + 績效 + 三節），系統會自動 ÷12 均攤到每月。若無則填 0。",
+        )
+        other_income = st.number_input(
+            "③ 每月其他固定收入（兼職、租金、股息、利息）",
+            0,
+            value=0,
+            step=1_000,
+            help="本薪以外、每月或可換算成每月的穩定現金流（兼差、副業、房租收入、配息）。一次性收入不要填。",
+        )
+        st.markdown(
+            f"**合計每月可用收入：NT$ "
+            f"{monthly_salary + annual_bonus / 12 + other_income:,.0f}**"
+        )
+
+    with st.expander("💸 每月支出（不含房貸）", expanded=True):
+        st.caption("房貸另在『基本資料』分頁的房屋條件中計算，這裡只填非房貸的固定支出。")
+        monthly_bad_debt = st.number_input(
+            "壞債支出（信貸／車貸／卡循／現金卡）",
+            0,
+            value=10_000,
+            step=1_000,
+            help="每月需固定還款的高利率負債：信用貸款、車貸、信用卡循環利息、現金卡。房貸不算。",
+        )
+        monthly_living = st.number_input(
+            "生活開銷（含保險娛樂、孝親費）",
+            0,
+            value=25_000,
+            step=1_000,
+            help="日常吃喝、交通、水電瓦斯、通訊、保險費月攤、娛樂、孝親費等扣除房貸與壞債後的所有開銷。",
+        )
+        st.markdown(
+            f"**合計每月固定支出：NT$ {monthly_bad_debt + monthly_living:,.0f}**"
+        )
 
     with st.expander("🏦 財力證明", expanded=False):
         total_assets = st.number_input("名下總資產估值", 0, value=2_000_000, step=10_000)
@@ -99,7 +138,7 @@ with st.sidebar:
 
 
 # ===================== 共用核心計算（僅依賴側邊欄）=====================
-total_monthly_income = monthly_income + annual_bonus / 12 + other_income
+total_monthly_income = monthly_salary + annual_bonus / 12 + other_income
 total_monthly_expense = monthly_living + monthly_bad_debt
 monthly_surplus = total_monthly_income - total_monthly_expense
 bad_debt_ratio = monthly_bad_debt / total_monthly_income if total_monthly_income > 0 else 0.0
@@ -226,7 +265,11 @@ with sub_check:
     st.caption("PPT 第一課：『不是收入決定階級，而是現金流決定階級。』")
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("每月總收入（含獎金均攤）", f"NT$ {total_monthly_income:,.0f}")
+    c1.metric(
+        "每月可用總收入",
+        f"NT$ {total_monthly_income:,.0f}",
+        help=f"本薪 {monthly_salary:,.0f} ＋ 年獎金 ÷12 ({annual_bonus / 12:,.0f}) ＋ 其他 {other_income:,.0f}",
+    )
     c2.metric(
         "每月結餘",
         f"NT$ {monthly_surplus:,.0f}",
