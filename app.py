@@ -128,6 +128,13 @@ with st.sidebar:
         )
         vacancy_months = st.number_input("年度空租月數預估", 0, 12, 2, 1)
 
+    with st.expander("🔍 預售屋建案資料", expanded=False):
+        project_name = st.text_input("建案名稱", value="某某花園")
+        developer_name = st.text_input("建商名稱", value="")
+        project_total_wan = st.number_input("建案總價（萬元）", 0, value=2000, step=10)
+        floor_area = st.number_input("權狀坪數", 0.0, value=30.0, step=0.5)
+        public_ratio = st.slider("公設比 (%)", 0, 50, 32, 1)
+
 
 # ===================== 核心計算 =====================
 annual_rate = annual_rate_pct / 100
@@ -169,7 +176,18 @@ mortgage_dti = (
 
 
 # ===================== 分頁區 =====================
-tab_check, tab_loan, tab_cash, tab_invest, tab_risk, tab_lazy = st.tabs(
+(
+    tab_check,
+    tab_loan,
+    tab_cash,
+    tab_invest,
+    tab_risk,
+    tab_lazy,
+    tab_presale,
+    tab_used,
+    tab_inspect,
+    tab_faq,
+) = st.tabs(
     [
         "🩺 體質檢測",
         "💰 房貸試算引擎",
@@ -177,6 +195,10 @@ tab_check, tab_loan, tab_cash, tab_invest, tab_risk, tab_lazy = st.tabs(
         "🏠 投資收益情境",
         "⚠️ 風險壓力測試",
         "📋 租金安全懶人包",
+        "🔍 預售屋掃雷",
+        "🏚️ 中古屋避險",
+        "✅ 驗屋防護網",
+        "💡 財富迷思 FAQ",
     ]
 )
 
@@ -782,6 +804,618 @@ with tab_lazy:
         "2. 看兩個重點：安全指數（≥1.2）+ 底線租金（你的上架價要 ≥ 它）。\n"
         "3. 偏緊或危險時的調整方法：降開銷、拉租金、壓房價、加頭期，或談更低利率/更長年限。"
     )
+
+
+# ======================================================
+# Tab 7：預售屋實戰掃雷與潛力評分表
+# ======================================================
+with tab_presale:
+    st.header("🔍 預售屋實戰掃雷與潛力評分表")
+    st.caption(
+        "依據《Ziv學長：預售屋買就賺》實戰策略 — "
+        "一張表看清地段加分、嫌惡扣分、合約地雷。"
+    )
+
+    unit_price = (project_total_wan * 10_000 / floor_area) if floor_area > 0 else 0
+    info_cols = st.columns(4)
+    info_cols[0].metric("建案", project_name or "—")
+    info_cols[1].metric("總價", f"{project_total_wan:,} 萬")
+    info_cols[2].metric("權狀坪數", f"{floor_area:.1f} 坪")
+    info_cols[3].metric("單價", f"{unit_price/10_000:,.1f} 萬/坪" if unit_price else "—")
+    if developer_name:
+        st.caption(f"🏗️ 建商：{developer_name}　|　公設比：{public_ratio}%")
+
+    st.divider()
+
+    # 一、地段增值潛力評分
+    st.subheader("一、地段增值潛力評分（加分項）")
+    st.caption("Ziv學長心法：『地段不是看現在，是看 5 年後政府帶你飛去哪。』")
+
+    col_l, col_r = st.columns([1, 1])
+    with col_l:
+        plus_metro = st.checkbox("🚄 高鐵 / 台鐵 / 捷運站附近（步行 10 分鐘內）", key="plus_metro")
+        plus_highway = st.checkbox("🛣️ 交流道 10 分鐘車程內", key="plus_highway")
+        plus_science = st.checkbox("🏢 科學園區 / 大型商辦聚落周邊", key="plus_science")
+        plus_redev = st.checkbox("🌳 政府大型重劃區 / 大型公園", key="plus_redev")
+
+    plus_count = sum([plus_metro, plus_highway, plus_science, plus_redev])
+    potential_score = plus_count * 25
+
+    with col_r:
+        fig_gauge = go.Figure(
+            go.Indicator(
+                mode="gauge+number",
+                value=potential_score,
+                number={"suffix": " 分", "font": {"size": 40}},
+                gauge={
+                    "axis": {"range": [0, 100]},
+                    "bar": {"color": "#2C3E50"},
+                    "steps": [
+                        {"range": [0, 25], "color": "#F5B7B1"},
+                        {"range": [25, 50], "color": "#F9E79F"},
+                        {"range": [50, 75], "color": "#A9DFBF"},
+                        {"range": [75, 100], "color": "#52BE80"},
+                    ],
+                    "threshold": {
+                        "line": {"color": "green", "width": 4},
+                        "thickness": 0.8,
+                        "value": 75,
+                    },
+                },
+                title={"text": "增值潛力指數"},
+            )
+        )
+        fig_gauge.update_layout(height=260, margin=dict(t=40, b=20))
+        st.plotly_chart(fig_gauge, use_container_width=True)
+
+    st.progress(potential_score / 100, text=f"增值潛力指數：{potential_score} / 100")
+
+    if plus_count >= 3:
+        st.success(
+            f"✅ **超高潛力地段！命中 {plus_count}/4 項利多。** "
+            "Ziv學長強烈推薦：這種題材建案就是『買就賺』的標的，"
+            "未來 3-5 年增值動能強勁，可優先佈局！"
+        )
+    elif plus_count == 2:
+        st.success(
+            f"🟢 **不錯的潛力地段** — 命中 {plus_count}/4 項利多，"
+            "具備中長期增值動能，可進一步評估價格合理性。"
+        )
+    elif plus_count == 1:
+        st.info(
+            f"📋 命中 {plus_count}/4 項利多，地段中規中矩。"
+            "若價格夠便宜可考慮，否則建議再看看別案。"
+        )
+    else:
+        st.warning(
+            "⚠️ 沒有命中任何重大利多題材，純粹靠建商行銷話術撐盤。"
+            "Ziv學長提醒：沒題材的預售屋，未來增值幾乎只能靠通膨。"
+        )
+
+    st.divider()
+
+    # 二、嫌惡設施一鍵掃雷
+    st.subheader("二、嫌惡設施一鍵掃雷（扣分與紅燈項）")
+    st.caption("Ziv學長警語：『嫌惡設施會大幅影響未來轉手價與銀行鑑價。』")
+
+    rc1, rc2 = st.columns(2)
+    with rc1:
+        bad_tower = st.checkbox("⚡ 高壓電塔 / 變電所 200 公尺內", key="bad_tower")
+        bad_factory = st.checkbox("🏭 工廠污染源 / 焚化爐 / 垃圾掩埋場", key="bad_factory")
+        bad_flood = st.checkbox("🌊 淹水紀錄區 / 順向坡 / 斷層帶", key="bad_flood")
+    with rc2:
+        bad_funeral = st.checkbox("⚰️ 殯葬設施 / 公墓 / 納骨塔 1 公里內", key="bad_funeral")
+        bad_noise = st.checkbox("🛻 高速公路 / 鐵路噪音帶 / 機場航道", key="bad_noise")
+
+    bad_flags = {
+        "高壓電塔": bad_tower, "工廠污染": bad_factory, "淹水/斷層": bad_flood,
+        "殯葬設施": bad_funeral, "高速公路噪音": bad_noise,
+    }
+    bad_hits = [k for k, v in bad_flags.items() if v]
+    bad_count = len(bad_hits)
+
+    if bad_count > 0:
+        st.error(
+            f"⚠️ **警報：包含 {bad_count} 項嚴重嫌惡設施 — {', '.join(bad_hits)}！**\n\n"
+            "這會 **大幅影響未來轉手價與銀行鑑價**（鑑價砍 10~20% 是常態），"
+            "甚至有的銀行會直接拒貸或大砍成數。\n\n"
+            "**👉 Ziv學長強烈建議：直接放棄此案，不要因為便宜上鉤！** "
+            "你買進的折讓，未來轉手時會被買家砍兩倍回來。"
+        )
+    else:
+        st.success("✅ 周邊無重大嫌惡設施，建案環境條件過關。")
+
+    st.divider()
+
+    # 三、定型化契約防護網
+    st.subheader("三、定型化契約防坑檢核")
+    st.caption("依據內政部《預售屋買賣定型化契約應記載及不得記載事項》三大重點。")
+
+    contract_equivalent = st.checkbox(
+        "📝 合約中『建材設備』有出現「同級品」字眼",
+        key="contract_equivalent",
+        help="同級品=建商可任意換較便宜建材，是常見坑點",
+    )
+    contract_deadline = st.checkbox(
+        "📅 開工日期 / 取得使照期限「未明確標示」（沒寫年月日）",
+        key="contract_deadline",
+        help="沒寫期限=建商可無限延期，沒違約金可求",
+    )
+    contract_retention = st.checkbox(
+        "💰 交屋保留款「不足總價 5%」（內政部建議最低保障）",
+        key="contract_retention",
+        help="保留款是你交屋驗收時唯一的籌碼",
+    )
+
+    contract_hits = []
+    if contract_equivalent:
+        contract_hits.append("『同級品』字眼")
+    if contract_deadline:
+        contract_hits.append("期限未明確")
+    if contract_retention:
+        contract_hits.append("保留款不足 5%")
+
+    if contract_hits:
+        st.warning(
+            f"⚠️ **發現 {len(contract_hits)} 個合約地雷：{', '.join(contract_hits)}**\n\n"
+            "**👉 Ziv學長提醒：要求建商修改合約，否則直接走人！**\n\n"
+            "- **「同級品」字眼**：要求改為**指定品牌型號**，或加註『須經買方書面同意』\n"
+            "- **期限不明**：要求**寫明年月日**＋逾期違約金（每日總價萬分之五）\n"
+            "- **保留款 < 5%**：依內政部範本，保留款應為**總價 5%**以上"
+        )
+    else:
+        st.success(
+            "✅ 三大合約地雷皆無發現，合約結構基本健全。"
+            "仍建議將合約交由地政士或律師最後審閱一次。"
+        )
+
+    # 綜合評分
+    st.divider()
+    st.subheader("📊 預售屋綜合戰績")
+
+    fc1, fc2, fc3 = st.columns(3)
+    fc1.metric("地段加分項", f"{plus_count} / 4")
+    fc2.metric(
+        "嫌惡扣分項", bad_count,
+        delta=f"-{bad_count}" if bad_count > 0 else "0",
+        delta_color="inverse" if bad_count > 0 else "off",
+    )
+    fc3.metric("合約地雷數", len(contract_hits))
+
+    if bad_count > 0:
+        st.error("### ❌ 不及格 — 嫌惡設施直接淘汰，建議放棄此案。")
+    elif contract_hits and plus_count <= 1:
+        st.warning("### ⚠️ 警示 — 地段平庸＋合約有坑，建議再評估或大幅議價。")
+    elif plus_count >= 3 and not contract_hits:
+        st.success("### 🚀 高分通過 — 地段強＋合約淨，Ziv學長指定可下手。")
+    elif plus_count >= 2 and not contract_hits:
+        st.success("### 🟢 通過 — 條件不錯，可進入價格議價階段。")
+    else:
+        st.info("### 📋 一般 — 條件普通，建議多比較幾案。")
+
+
+# ======================================================
+# Tab 8：中古屋淘金與銀行貸款避險儀表板
+# ======================================================
+with tab_used:
+    st.header("🏚️ 中古屋淘金與銀行貸款避險儀表板")
+    st.caption("依據《Ziv學長：中古屋投資不敗指南》— 三大不買、銀行拒貸地雷、真實居住成本。")
+
+    st.subheader("📍 物件基本資料")
+    uc1, uc2, uc3, uc4 = st.columns(4)
+    with uc1:
+        used_location = st.selectbox(
+            "房屋地點",
+            options=["雙北地區", "非雙北地區"],
+            index=1,
+            key="used_location",
+        )
+    with uc2:
+        used_age = st.number_input("屋齡（年）", 0, 100, 25, 1, key="used_age")
+    with uc3:
+        used_floor = st.selectbox(
+            "所在樓層",
+            options=["2 樓", "頂樓", "其他中間樓層"],
+            index=2,
+            key="used_floor",
+        )
+    with uc4:
+        used_type = st.selectbox(
+            "房屋類型",
+            options=["一般住宅", "山區豪宅", "地上權屋"],
+            index=0,
+            key="used_type",
+        )
+
+    st.divider()
+    st.subheader("一、三大絕對不買類型診斷")
+
+    diag_messages = []
+    is_red = False
+
+    # 規則 1：非雙北且屋齡 > 40
+    if used_location == "非雙北地區" and used_age > 40:
+        st.error(
+            "⚠️ **超過 40 年的老公寓（雙北除外）未來極難轉手且貸款成數極低，"
+            "學長建議避開！**\n\n"
+            "非雙北的 40 年以上老屋通常面臨：銀行貸款成數砍到 5 成以下、"
+            "鑑價遠低於行情、買家集中、轉手週期 6~12 個月起跳。"
+        )
+        is_red = True
+        diag_messages.append("老屋（非雙北 >40 年）")
+    else:
+        st.success("✅ 屋齡與地點組合通過（非『非雙北 + 40 年以上老公寓』）。")
+
+    # 規則 2：山區豪宅
+    if used_type == "山區豪宅":
+        st.error(
+            "⚠️ **山區豪宅市場需求極低，流動性差，請勿投資！**\n\n"
+            "山區豪宅普遍面臨：銀行鑑價保守、貸款成數低（多為 5~6 成）、"
+            "潛在買家極少、開車進出不便、未來轉手週期動輒 1-2 年。"
+        )
+        is_red = True
+        diag_messages.append("山區豪宅")
+    elif used_type == "地上權屋":
+        st.error(
+            "🚫 **地上權屋等同銀行拒貸物件！**\n\n"
+            "沒有土地持分、貸款成數極低（多為 4~5 成）、"
+            "70 年使用權到期後歸零，僅適合自住不適合投資。"
+        )
+        is_red = True
+        diag_messages.append("地上權屋")
+    else:
+        st.success("✅ 房屋類型過關（一般住宅）。")
+
+    # 規則 3：2樓 或 頂樓 且舊大樓（>20年）
+    if used_floor in ("2 樓", "頂樓") and used_age > 20:
+        st.warning(
+            f"⚠️ **舊大樓 {used_floor} 易有以下問題，市場接受度低，請謹慎評估或大幅殺價：**\n\n"
+            "- **2 樓**：管線堵塞（廚廁污水從你家溢出是常見惡夢）、噪音傳導、私密性差\n"
+            "- **頂樓**：夏天悶熱、漏水機率高、屋頂違建衍生糾紛\n\n"
+            "**👉 對策：殺價殺到比同棟均價低 10~15%，或要求賣方先做防水處理後再交屋。**"
+        )
+        diag_messages.append(f"舊大樓 {used_floor}")
+    elif used_floor in ("2 樓", "頂樓"):
+        st.info(f"ℹ️ 樓層為 {used_floor}，因屋齡尚新影響有限，仍建議現場仔細看管線/防水。")
+    else:
+        st.success("✅ 樓層條件良好（中間樓層）。")
+
+    st.divider()
+    st.subheader("二、銀行拒貸地雷快篩")
+    st.caption("Ziv學長提醒：『沒有銀行貸款，就沒有低成本槓桿。』")
+
+    deny_options = ["海砂屋", "輻射屋", "傾斜屋", "凶宅", "地上權屋"]
+    deny_hits = st.multiselect(
+        "勾選下列屋況疑慮（一項都不能有）",
+        options=deny_options,
+        default=["地上權屋"] if used_type == "地上權屋" else [],
+        help="銀行對這五類物件直接拒貸或大砍成數",
+    )
+
+    if deny_hits:
+        st.error(
+            f"🚫 **銀行拒貸物件！命中：{', '.join(deny_hits)}**\n\n"
+            "這些物件會導致你 **無法使用『好債槓桿』**，"
+            "必須全額現金或極高利率，**絕對不要碰！**\n\n"
+            "即使賣方價格便宜 30%，沒有銀行貸款的低利成本，整體報酬率反而更差，"
+            "且未來轉手時，下一手買家也面臨同樣問題。"
+        )
+    else:
+        st.success("✅ 屋況無重大拒貸地雷，銀行可正常承作貸款。")
+
+    st.divider()
+    st.subheader("三、真實居住成本計算機")
+    st.caption("Ziv學長心法：『出價前先算每年真實成本，才知道上限在哪。』")
+
+    cc1, cc2, cc3 = st.columns(3)
+    with cc1:
+        used_price_wan = st.number_input(
+            "預估購買總價（萬元）", 0, value=1500, step=10, key="used_price",
+        )
+    with cc2:
+        used_hold_years = st.number_input("預計持有年限", 1, 50, 10, 1, key="used_hold")
+    with cc3:
+        used_renovation_wan = st.number_input(
+            "預估裝潢／修繕費用（萬元）", 0, value=150, step=10, key="used_renov",
+        )
+
+    used_price = used_price_wan * 10_000
+    used_renov = used_renovation_wan * 10_000
+    total_cost = used_price + used_renov
+    annual_cost = total_cost / used_hold_years if used_hold_years > 0 else 0
+    monthly_cost_used = annual_cost / 12
+
+    rc1, rc2, rc3 = st.columns(3)
+    rc1.metric("總投入成本", f"NT$ {total_cost:,.0f}")
+    rc2.metric("每年居住成本", f"NT$ {annual_cost:,.0f}")
+    rc3.metric("每月居住成本", f"NT$ {monthly_cost_used:,.0f}")
+
+    if is_red or deny_hits:
+        st.error(
+            f"❌ **此物件已觸發紅線警報，不建議出價。** "
+            f"即使每月成本看起來 NT$ {monthly_cost_used:,.0f}，"
+            "未來流動性與轉手損失會把你的報酬率吃光。"
+        )
+    elif diag_messages:
+        st.warning(
+            f"⚠️ 物件存在 **{', '.join(diag_messages)}** 等議價籌碼。"
+            f"出價上限建議：以「每月成本 ≤ 同區租金 × 1.0」反推，"
+            "並依議價籌碼再壓 10% 起跳。"
+        )
+    else:
+        st.success(
+            f"✅ 物件條件過關，每月真實居住成本 NT$ {monthly_cost_used:,.0f}。"
+            "出價時建議：**月成本 ≤ 同區租金行情**，才符合 Ziv學長『買比租划算』的進場原則。"
+        )
+
+
+# ======================================================
+# Tab 9：數位驗屋防護網與待辦清單
+# ======================================================
+with tab_inspect:
+    st.header("✅ 數位驗屋防護網與待辦清單")
+    st.caption("逐項勾選，進度條即時前進；發現重大問題會自動列出議價籌碼。")
+
+    inspect_pre, inspect_used = st.tabs(["🏗️ 預售屋交屋檢驗", "🏚️ 中古屋看屋檢驗"])
+
+    # -------- 預售屋交屋檢驗 --------
+    with inspect_pre:
+        st.markdown("##### 💧 水電")
+        pre_drain = st.checkbox(
+            "排水管暢通無泥沙（含廚房、廁所、陽台地排）", key="pre_drain",
+        )
+        pre_circuit = st.checkbox("總電箱迴路標示清晰，且與圖面相符", key="pre_circuit")
+        pre_water_pressure = st.checkbox("各出水口水壓正常、無漏水", key="pre_water_pressure")
+
+        st.markdown("##### 📏 尺寸")
+        pre_area = st.checkbox(
+            "室內實際坪數與合約圖面相符（誤差 < 1%）", key="pre_area",
+        )
+        pre_height = st.checkbox("樓高與合約相符（淨高、樓板厚度）", key="pre_height")
+        pre_beam = st.checkbox("樑柱位置與圖面相符，無誤差", key="pre_beam")
+
+        st.markdown("##### 🧱 建材")
+        pre_tile = st.checkbox("地磚、壁磚敲擊無空鼓聲", key="pre_tile")
+        pre_door = st.checkbox("門窗密合度良好、隔音達合約標準", key="pre_door")
+        pre_finish = st.checkbox(
+            "建材品牌與型號與合約一致（無被『同級品』替換）", key="pre_finish",
+        )
+
+        pre_items = [
+            pre_drain, pre_circuit, pre_water_pressure,
+            pre_area, pre_height, pre_beam,
+            pre_tile, pre_door, pre_finish,
+        ]
+        pre_progress = sum(pre_items) / len(pre_items)
+        st.markdown("---")
+        st.progress(
+            pre_progress,
+            text=f"預售屋驗屋完成度：{sum(pre_items)} / {len(pre_items)}（{pre_progress * 100:.0f}%）",
+        )
+
+        if pre_progress == 1.0:
+            st.success(
+                "🎉 **預售屋驗屋全部過關！** 可以準備辦理交屋手續，"
+                "記得保留 5% 尾款直到所有缺失補正完畢。"
+            )
+        elif pre_progress >= 0.7:
+            st.info(
+                f"📋 已完成 {pre_progress * 100:.0f}%，剩餘項目請逐一檢查。"
+                "未過項目務必白紙黑字列入交屋缺失單，限期改善。"
+            )
+        else:
+            st.warning(
+                f"⚠️ 完成度僅 {pre_progress * 100:.0f}%，請繼續完成所有項目。"
+                "驗屋只有一次機會，務必逐項確認、拍照存證。"
+            )
+
+    # -------- 中古屋看屋檢驗 --------
+    with inspect_used:
+        st.markdown("##### 💦 漏水壁癌")
+        used_leak_window = st.checkbox(
+            "窗框四周無水痕、無壁癌", key="used_leak_window",
+        )
+        used_leak_bath = st.checkbox(
+            "廁所外牆（與廁所相連的房間牆面）無水痕", key="used_leak_bath",
+        )
+        used_leak_ceiling = st.checkbox(
+            "天花板無水痕、無剝落（特別是頂樓與廁所下方）", key="used_leak_ceiling",
+        )
+
+        st.markdown("##### 🏛️ 結構安全")
+        used_crack = st.checkbox(
+            "樑柱無 45 度交叉裂縫", key="used_crack",
+        )
+        used_wall = st.checkbox(
+            "無自行打掉承重牆痕跡（廚房／浴室主牆）", key="used_wall",
+        )
+        used_tilt = st.checkbox(
+            "地面與牆面垂直（彈珠不會自動滾動）", key="used_tilt",
+        )
+
+        st.markdown("##### 🔧 管線狀態")
+        used_pipe = st.checkbox(
+            "若屋齡 > 20 年，已重拉水電管線（請屋主出示證明）", key="used_pipe",
+        )
+        used_electric = st.checkbox(
+            "電線無外露老化，總電量足夠（30A 以上）", key="used_electric",
+        )
+        used_sewage = st.checkbox(
+            "排水順暢、無回堵異味", key="used_sewage",
+        )
+
+        used_items = [
+            used_leak_window, used_leak_bath, used_leak_ceiling,
+            used_crack, used_wall, used_tilt,
+            used_pipe, used_electric, used_sewage,
+        ]
+        used_progress = sum(used_items) / len(used_items)
+        st.markdown("---")
+        st.progress(
+            used_progress,
+            text=f"中古屋驗屋完成度：{sum(used_items)} / {len(used_items)}（{used_progress * 100:.0f}%）",
+        )
+
+        # 重大議價籌碼提示
+        critical_issues = []
+        if not used_leak_window:
+            critical_issues.append("窗框漏水")
+        if not used_leak_bath:
+            critical_issues.append("廁所外牆水痕")
+        if not used_leak_ceiling:
+            critical_issues.append("天花板水痕")
+        if not used_crack:
+            critical_issues.append("樑柱裂縫")
+        if not used_wall:
+            critical_issues.append("承重牆遭破壞")
+        if not used_tilt:
+            critical_issues.append("地面/牆面不平")
+
+        if critical_issues:
+            st.warning(
+                f"⚠️ **發現重大修繕成本項目：{', '.join(critical_issues)}**\n\n"
+                "請將此修繕費用計入買房總成本，並作為與房仲、屋主強力議價的籌碼：\n\n"
+                "- **漏水/壁癌**：抓漏 + 防水工程約 NT$ 5~15 萬／處\n"
+                "- **結構裂縫**：需鑑定報告，輕者補強約 NT$ 10~30 萬，重者建議放棄\n"
+                "- **承重牆破壞**：違法且有結構風險，**強烈建議放棄此案**\n"
+                "- **地面/牆面不平**：地基沉陷可能，務必請結構技師鑑定\n\n"
+                "**👉 議價公式：總價 -（修繕成本 × 1.5）= 你的出價上限。**"
+            )
+        elif used_progress == 1.0:
+            st.success(
+                "🎉 **中古屋全項目過關！** 屋況良好，"
+                "可以進入正式議價階段，記得仍要請地政士查謄本與凶宅資訊。"
+            )
+        else:
+            st.info(
+                f"📋 已完成 {used_progress * 100:.0f}%，"
+                "請依序完成剩餘項目；未勾選 ≠ 沒問題，是『尚未確認』。"
+            )
+
+
+# ======================================================
+# Tab 10：財富思維迷思破解與學長神回覆 FAQ
+# ======================================================
+with tab_faq:
+    st.header("💡 財富思維迷思破解 × 學長神回覆 FAQ")
+    st.caption(
+        "依據《Ziv學長：財富思維與貸款槓桿》— "
+        "破解中產階級三大思維陷阱，公開學長實戰 SOP。"
+    )
+
+    # ---- 迷思破解器 ----
+    st.subheader("🧠 迷思破解器（互動測驗）")
+    st.markdown(
+        "**測驗題：** 買一輛 100 萬的新車自己開，這是 **資產** 還是 **負債**？"
+    )
+
+    answer = st.radio(
+        "請選擇你的答案：",
+        options=["（請選擇）", "資產", "負債"],
+        index=0,
+        horizontal=True,
+        key="faq_car_quiz",
+    )
+
+    if answer == "資產":
+        st.error(
+            "❌ **錯誤！這是中產階級迷思。**\n\n"
+            "車子落地就折舊（第一年通常折 15~20%），還會吃掉你的現金流：\n"
+            "- 每月油錢、保養、保險、停車費\n"
+            "- 每年牌照稅、燃料稅、折舊\n"
+            "- 五年後價值剩不到 40%\n\n"
+            "**這是純粹的負債。** Ziv學長定義：『**會把錢從你口袋拿走的東西，就是負債。**』\n\n"
+            "💡 **真正的富人邏輯**：先用低利房貸買進生錢資產，等資產的『被動收入』超過買車成本，"
+            "再用那筆被動收入養車——這才叫『用資產買負債』，而不是用薪水。"
+        )
+    elif answer == "負債":
+        st.success(
+            "✅ **正確！這就是富人思維。**\n\n"
+            "Ziv學長的鐵律：『**能把錢放進你口袋的才是資產，會把錢掏走的叫負債。**』\n\n"
+            "- ✅ **資產**：收租房、預售屋（轉手價差）、股息ETF、版稅 → 替你工作\n"
+            "- ❌ **負債**：自用新車、名牌包、信貸消費、卡循 → 你替它工作\n\n"
+            "🚀 你已經跨過第一道思維門檻。下一步：**先累積資產，讓資產的現金流幫你養負債**，"
+            "而不是用薪水硬扛——這就是富人與中產的根本差距。"
+        )
+    else:
+        st.info("👆 請先選擇答案，看看你是中產思維還是富人思維。")
+
+    st.divider()
+
+    # ---- 學長神回覆 FAQ ----
+    st.subheader("📚 學長神回覆 FAQ（實戰心法）")
+    st.caption("展開下方折疊面板，看 Ziv學長對最常見問題的犀利回覆。")
+
+    with st.expander("🏢 **Q1：整棟大廈估價的秘密是什麼？**"):
+        st.markdown(
+            "**A：銀行估價是以「整棟」為單位，而不是單戶。**\n\n"
+            "這意味著：如果同棟大樓有不同戶的入手價落差很大（例如 40 萬、55 萬、65 萬／坪），"
+            "你能買到越低於高價戶的價格，未來能從銀行「搬出來的錢（增貸）」就越多！\n\n"
+            "**📐 實戰邏輯：**\n"
+            "- 同棟成交價區間：40 ~ 65 萬／坪\n"
+            "- 銀行鑑價會抓**加權平均約 55 萬／坪**\n"
+            "- 你以 40 萬／坪買進 → 鑑價跟著平均往上走 → 未來可增貸出 **(55-40) × 坪數 × 8成** 的現金\n\n"
+            "**👉 結論：價差越大越好，挑同棟最便宜那戶，等於挑了一個現成的增貸金雞母。**"
+        )
+
+    with st.expander("🏦 **Q2：富邦增貸 SOP 是什麼？（資金流必過水）**"):
+        st.markdown(
+            "**A：增貸出來的錢必須過水，絕不能直接買房。**\n\n"
+            "銀行對「房屋增貸資金用途」管控極嚴，"
+            "若直接拿增貸款項去買下一間房，會被視為 **違規轉貸炒房**，"
+            "可能被收回貸款 + 列為黑名單。\n\n"
+            "**✅ Ziv學長實戰 SOP（富邦版）：**\n\n"
+            "```\n"
+            "1. 增貸入帳 → 立即轉出到其他銀行（脫離原戶頭金流追蹤）\n"
+            "2. 在新銀行定存 3 個月（製造『非急用』軌跡）\n"
+            "3. 到期解約 → 投入 0050 / 保單 / 基金（留存『投資用途』憑證）\n"
+            "4. 滿 1 年後 → 才能合法解禁拿去買下一間房\n"
+            "```\n\n"
+            "**🚨 注意：每一步都要留下對帳單、轉帳記錄、投資成交單，"
+            "未來被銀行抽查時這些就是你的免死金牌。**"
+        )
+
+    with st.expander("🔍 **Q3：為什麼要大量看房？看 10-20 間不浪費時間嗎？**"):
+        st.markdown(
+            "**A：不是浪費，而是『經驗值換籌碼』的必修課。**\n\n"
+            "Ziv學長心法：**每月看 10-20 間，篩選 2-5 間進攻**。\n\n"
+            "**🎯 大量看房的三大效益：**\n\n"
+            "1. **累積行情敏銳度** — 你看過 100 間，才知道哪間是『蘋果案』（低於市場行情的好物件）。"
+            "新手看 1-2 間就出價，幾乎一定買貴。\n\n"
+            "2. **與房仲建立談判籌碼** — 房仲看你『會看、敢出』，會主動把好案子第一時間送來，"
+            "而不是先給投資客或熟客。\n\n"
+            "3. **訓練決斷力** — 真正的好物件出現時，你要在 24~48 小時內出價斡旋。"
+            "沒看過量的人，會猶豫到錯過。\n\n"
+            "**👉 結論：看房是一場數量遊戲，量到了才會出現質。"
+            "10 間看不到蘋果案，20 間就會出現。不夠就繼續看，這是『複利型』的努力。**"
+        )
+
+    with st.expander("💎 **Q4（加碼）：什麼是 Ziv學長口中的「好債」與「壞債」？**"):
+        st.markdown(
+            "**A：用一句話分辨——『**這筆債借出來，是用來買資產還是負債？**』**\n\n"
+            "| 類型 | 利率 | 用途 | 結果 |\n"
+            "|---|---|---|---|\n"
+            "| ✅ **好債** | 2~3% 房貸 | 買收租房、預售屋 | 資產替你還債，現金流為正 |\n"
+            "| ✅ **好債** | 2~3% 增貸 | 投入 0050/保單 | 資產增值 > 利息成本 |\n"
+            "| ❌ **壞債** | 15~20% 卡循 | 買新車、名牌、旅遊 | 你替負債工作，現金流為負 |\n"
+            "| ❌ **壞債** | 5~8% 信貸 | 補生活費、繳卡費 | 雪球越滾越大，惡性循環 |\n\n"
+            "**👉 富人不是不借錢，是只借『會增值的錢』。** "
+            "壞債越多越窮，好債越多越富——這就是槓桿的本質。"
+        )
+
+    with st.expander("🏗️ **Q5（加碼）：為什麼 Ziv學長推預售屋而不是新成屋？**"):
+        st.markdown(
+            "**A：因為預售屋是『用 1 成自備款，鎖定 100% 房價漲幅』的合法槓桿。**\n\n"
+            "**📊 數字比較（假設房價 1000 萬、3 年後漲 20%）：**\n\n"
+            "| 項目 | 預售屋 | 新成屋 |\n"
+            "|---|---|---|\n"
+            "| 自備款 | 100 萬（10%） | 200~300 萬（20-30%） |\n"
+            "| 3 年後房價 | 1200 萬 | 1200 萬 |\n"
+            "| 帳面獲利 | +200 萬 | +200 萬 |\n"
+            "| **報酬率** | **+200%（200/100）** | **+67~100%（200/200~300）** |\n\n"
+            "**👉 同樣的漲幅，預售屋因為自備款少，報酬率是新成屋的 2~3 倍。** "
+            "這就是學長口中『買就賺』的數學。"
+        )
 
 
 # ===================== 頁尾 =====================
