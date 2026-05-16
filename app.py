@@ -74,10 +74,10 @@ st.caption(
 )
 
 
-# ===================== 側邊欄輸入區 =====================
+# ===================== 側邊欄（僅放共用基本資料）=====================
 with st.sidebar:
-    st.header("📋 現況輸入區")
-    st.caption("先把所有參數設定好，分頁圖表會自動同步。")
+    st.header("📋 共用基本資料")
+    st.caption("這三組是跨分頁共用的參數；其餘分頁專屬參數已移到各分頁上方。")
 
     with st.expander("👤 個人基本條件", expanded=True):
         age = st.number_input("目前年齡", 18, 80, 30, 1)
@@ -97,47 +97,8 @@ with st.sidebar:
         total_liabilities = st.number_input("名下總負債餘額", 0, value=500_000, step=10_000)
         cash_reserve = st.number_input("現金存款（緊急預備金來源）", 0, value=500_000, step=10_000)
 
-    with st.expander("🏠 房屋與貸款條件", expanded=True):
-        house_price = st.number_input("房屋總價", 0, value=10_000_000, step=100_000)
-        down_payment = st.number_input("自備款", 0, value=2_000_000, step=100_000)
-        renovation = st.number_input("裝潢費用", 0, value=300_000, step=10_000)
-        other_fees = st.number_input("其他費用（代書/稅費）", 0, value=50_000, step=10_000)
-        annual_rate_pct = st.number_input(
-            "貸款年利率（%）", 0.0, 10.0, 2.5, 0.05, format="%.2f"
-        )
-        grace_years = st.number_input("寬限期（年，只繳利息）", 0, 10, 5, 1)
 
-    with st.expander("📈 租金與投資", expanded=False):
-        rent = st.number_input("預估月租金", 0, value=35_000, step=1_000)
-        mgmt_fee = st.number_input("月管理費＋稅", 0, value=2_000, step=500)
-        vacancy_discount = st.slider(
-            "空置保守打折比例（懶人包公式）", 0.0, 0.5, 0.10, 0.01,
-            help="0.10 代表打 9 折；越保守可拉到 0.20",
-        )
-        repair_pct = st.slider(
-            "維修小金庫（佔租金 %）", 0.0, 0.2, 0.05, 0.01,
-            help="新屋預設 5%、老屋建議 10%",
-        )
-
-    with st.expander("⚠️ 風險壓力測試參數", expanded=False):
-        location_rating = st.select_slider(
-            "房屋地段等級",
-            options=[1, 2, 3, 4, 5],
-            value=2,
-            format_func=lambda x: {1: "1 精華", 2: "2 優良", 3: "3 一般", 4: "4 偏遠", 5: "5 極偏"}[x],
-        )
-        vacancy_months = st.number_input("年度空租月數預估", 0, 12, 2, 1)
-
-    with st.expander("🔍 預售屋建案資料", expanded=False):
-        project_name = st.text_input("建案名稱", value="某某花園")
-        developer_name = st.text_input("建商名稱", value="")
-        project_total_wan = st.number_input("建案總價（萬元）", 0, value=2000, step=10)
-        floor_area = st.number_input("權狀坪數", 0.0, value=30.0, step=0.5)
-        public_ratio = st.slider("公設比 (%)", 0, 50, 32, 1)
-
-
-# ===================== 核心計算 =====================
-annual_rate = annual_rate_pct / 100
+# ===================== 共用核心計算（僅依賴側邊欄）=====================
 total_monthly_income = monthly_income + annual_bonus / 12 + other_income
 total_monthly_expense = monthly_living + monthly_bad_debt
 monthly_surplus = total_monthly_income - total_monthly_expense
@@ -145,33 +106,6 @@ bad_debt_ratio = monthly_bad_debt / total_monthly_income if total_monthly_income
 age_plus_loan = age + loan_years
 asset_liability_ratio = (
     total_assets / total_liabilities if total_liabilities > 0 else float("inf")
-)
-
-# 房貸計算引擎
-loan_amount = max(house_price - down_payment, 0)
-ltv = loan_amount / house_price if house_price > 0 else 0
-total_investment = down_payment + renovation + other_fees
-monthly_rate = annual_rate / 12
-total_months = int(loan_years * 12)
-grace_months = int(min(grace_years, loan_years) * 12)
-pay_months = total_months - grace_months
-
-grace_payment = loan_amount * monthly_rate
-post_grace_payment = pmt(monthly_rate, pay_months, loan_amount) if pay_months > 0 else 0
-avg_monthly_payment = (
-    (grace_payment * grace_months + post_grace_payment * pay_months) / total_months
-    if total_months > 0 else 0
-)
-total_interest = (
-    grace_payment * grace_months + post_grace_payment * pay_months - loan_amount
-)
-total_repayment = total_interest + loan_amount
-interest_ratio = total_interest / total_repayment if total_repayment > 0 else 0
-
-# 含房貸的 DTI（送件用）
-mortgage_dti = (
-    (monthly_bad_debt + post_grace_payment) / total_monthly_income
-    if total_monthly_income > 0 else 1.0
 )
 
 
@@ -289,6 +223,46 @@ with tab_loan:
     st.header("💰 房貸試算引擎（PMT + 寬限期）")
     st.caption("公式來源：Excel 房貸計算引擎 — PMT 本息攤還、寬限期只繳利息、利率敏感度。")
 
+    with st.container(border=True):
+        st.markdown("##### 🏠 房屋與貸款條件")
+        loan_col_a, loan_col_b = st.columns(2)
+        with loan_col_a:
+            house_price = st.number_input("房屋總價", 0, value=10_000_000, step=100_000, key="loan_house_price")
+            down_payment = st.number_input("自備款", 0, value=2_000_000, step=100_000, key="loan_down_payment")
+            renovation = st.number_input("裝潢費用", 0, value=300_000, step=10_000, key="loan_renovation")
+        with loan_col_b:
+            other_fees = st.number_input("其他費用（代書/稅費）", 0, value=50_000, step=10_000, key="loan_other_fees")
+            annual_rate_pct = st.number_input(
+                "貸款年利率（%）", 0.0, 10.0, 2.5, 0.05, format="%.2f", key="loan_rate_pct",
+            )
+            grace_years = st.number_input("寬限期（年，只繳利息）", 0, 10, 5, 1, key="loan_grace_years")
+
+    # ---- 房貸計算 ----
+    annual_rate = annual_rate_pct / 100
+    loan_amount = max(house_price - down_payment, 0)
+    ltv = loan_amount / house_price if house_price > 0 else 0
+    total_investment = down_payment + renovation + other_fees
+    monthly_rate = annual_rate / 12
+    total_months = int(loan_years * 12)
+    grace_months = int(min(grace_years, loan_years) * 12)
+    pay_months = total_months - grace_months
+    grace_payment = loan_amount * monthly_rate
+    post_grace_payment = pmt(monthly_rate, pay_months, loan_amount) if pay_months > 0 else 0
+    avg_monthly_payment = (
+        (grace_payment * grace_months + post_grace_payment * pay_months) / total_months
+        if total_months > 0 else 0
+    )
+    total_interest = (
+        grace_payment * grace_months + post_grace_payment * pay_months - loan_amount
+    )
+    total_repayment = total_interest + loan_amount
+    interest_ratio = total_interest / total_repayment if total_repayment > 0 else 0
+    mortgage_dti = (
+        (monthly_bad_debt + post_grace_payment) / total_monthly_income
+        if total_monthly_income > 0 else 1.0
+    )
+
+    st.markdown("---")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("貸款金額", f"NT$ {loan_amount:,.0f}")
     m2.metric("貸款成數 (LTV)", f"{ltv * 100:.1f}%")
@@ -539,6 +513,25 @@ with tab_invest:
     st.header("🏠 投資收益情境（含房價增值3情境）")
     st.caption("公式來源：Excel 投資收益計算 — 租金回收率、投資回收期、樂觀/現實/悲觀房價增值。")
 
+    with st.container(border=True):
+        st.markdown("##### 📈 租金與投資參數")
+        inv_col_a, inv_col_b = st.columns(2)
+        with inv_col_a:
+            rent = st.number_input("預估月租金", 0, value=35_000, step=1_000, key="inv_rent")
+            mgmt_fee = st.number_input("月管理費＋稅", 0, value=2_000, step=500, key="inv_mgmt_fee")
+        with inv_col_b:
+            vacancy_discount = st.slider(
+                "空置保守打折比例（懶人包公式）", 0.0, 0.5, 0.10, 0.01,
+                help="0.10 代表打 9 折；越保守可拉到 0.20",
+                key="inv_vacancy_discount",
+            )
+            repair_pct = st.slider(
+                "維修小金庫（佔租金 %）", 0.0, 0.2, 0.05, 0.01,
+                help="新屋預設 5%、老屋建議 10%",
+                key="inv_repair_pct",
+            )
+
+    st.markdown("---")
     annual_rent = rent * 12
     rental_yield = annual_rent / total_investment if total_investment > 0 else 0
     monthly_net = rent - post_grace_payment
@@ -624,6 +617,23 @@ with tab_risk:
     st.header("⚠️ 風險壓力測試")
     st.caption("公式來源：Excel 風險管理系統 — 空租準備金、利率衝擊、收入下滑。")
 
+    with st.container(border=True):
+        st.markdown("##### 🎚️ 風險情境參數")
+        risk_col_a, risk_col_b = st.columns(2)
+        with risk_col_a:
+            location_rating = st.select_slider(
+                "房屋地段等級",
+                options=[1, 2, 3, 4, 5],
+                value=2,
+                format_func=lambda x: {1: "1 精華", 2: "2 優良", 3: "3 一般", 4: "4 偏遠", 5: "5 極偏"}[x],
+                key="risk_location",
+            )
+        with risk_col_b:
+            vacancy_months = st.number_input(
+                "年度空租月數預估", 0, 12, 2, 1, key="risk_vacancy_months",
+            )
+
+    st.markdown("---")
     # 空租風險
     st.markdown("##### 🏚️ 空租風險評估")
     monthly_cost = post_grace_payment + mgmt_fee
@@ -816,6 +826,20 @@ with tab_presale:
         "一張表看清地段加分、嫌惡扣分、合約地雷。"
     )
 
+    with st.container(border=True):
+        st.markdown("##### 🏗️ 建案基本資料")
+        pre_col_a, pre_col_b = st.columns(2)
+        with pre_col_a:
+            project_name = st.text_input("建案名稱", value="某某花園", key="pre_project_name")
+            developer_name = st.text_input("建商名稱", value="", key="pre_developer_name")
+            project_total_wan = st.number_input(
+                "建案總價（萬元）", 0, value=2000, step=10, key="pre_total_wan",
+            )
+        with pre_col_b:
+            floor_area = st.number_input("權狀坪數", 0.0, value=30.0, step=0.5, key="pre_floor_area")
+            public_ratio = st.slider("公設比 (%)", 0, 50, 32, 1, key="pre_public_ratio")
+
+    st.markdown("---")
     unit_price = (project_total_wan * 10_000 / floor_area) if floor_area > 0 else 0
     info_cols = st.columns(4)
     info_cols[0].metric("建案", project_name or "—")
