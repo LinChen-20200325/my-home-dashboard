@@ -458,6 +458,7 @@ with sub_loan:
             go.Bar(
                 x=annual["年度"], y=annual["年利息"] / 10_000,
                 name="年繳利息（萬）", marker_color="#E74C3C",
+                hovertemplate="第 %{x} 年：<b>%{y:,.2f} 萬</b><extra>%{fullData.name}</extra>",
             ),
             secondary_y=False,
         )
@@ -465,6 +466,7 @@ with sub_loan:
             go.Bar(
                 x=annual["年度"], y=annual["年本金"] / 10_000,
                 name="年繳本金（萬）", marker_color="#27AE60",
+                hovertemplate="第 %{x} 年：<b>%{y:,.2f} 萬</b><extra>%{fullData.name}</extra>",
             ),
             secondary_y=False,
         )
@@ -473,6 +475,7 @@ with sub_loan:
                 x=annual["年度"], y=annual["年底剩餘"] / 10_000,
                 name="年底剩餘本金（萬）", mode="lines+markers",
                 line=dict(color="#2C3E50", width=3),
+                hovertemplate="第 %{x} 年底：<b>%{y:,.2f} 萬</b><extra>%{fullData.name}</extra>",
             ),
             secondary_y=True,
         )
@@ -533,6 +536,7 @@ with sub_loan:
                 text=[f"{fmt_wan(v)}" for v in df_rate["新月付金"]],
                 textposition="outside",
                 name="月付金",
+                hovertemplate="%{x}<br>月付金：<b>%{y:,.2f} 萬</b><extra></extra>",
             )
         )
         fig2.update_layout(
@@ -604,6 +608,7 @@ with sub_cash:
             marker_color=["#27AE60", "#E67E22", "#E67E22", "#3498DB", "#C0392B"],
             text=[f"{fmt_wan(v)}" for v in cf_breakdown["金額"]],
             textposition="outside",
+            hovertemplate="%{x}<br><b>%{y:,.2f} 萬</b><extra></extra>",
         )
     )
     fig3.update_layout(
@@ -634,6 +639,7 @@ with sub_cash:
             fill="tozeroy",
             line=dict(color="#16A085", width=3),
             name="累積現金流（萬）",
+            hovertemplate="第 %{x} 年累積：<b>%{y:,.2f} 萬</b><extra></extra>",
         )
     )
     fig4.add_hline(y=0, line_dash="dash", line_color="red")
@@ -718,6 +724,7 @@ with sub_invest:
             x=years_list, y=[v / 10_000 for v in optimistic], mode="lines+markers",
             name="樂觀 +4.5%/年",
             line=dict(color="#27AE60", width=3),
+            hovertemplate="第 %{x} 年：<b>%{y:,.1f} 萬</b><extra>%{fullData.name}</extra>",
         )
     )
     fig5.add_trace(
@@ -725,6 +732,7 @@ with sub_invest:
             x=years_list, y=[v / 10_000 for v in realistic], mode="lines+markers",
             name="現實 +3.0%/年",
             line=dict(color="#2980B9", width=3),
+            hovertemplate="第 %{x} 年：<b>%{y:,.1f} 萬</b><extra>%{fullData.name}</extra>",
         )
     )
     fig5.add_trace(
@@ -732,6 +740,7 @@ with sub_invest:
             x=years_list, y=[v / 10_000 for v in pessimistic], mode="lines+markers",
             name="悲觀 +2.0%/年",
             line=dict(color="#C0392B", width=3),
+            hovertemplate="第 %{x} 年：<b>%{y:,.1f} 萬</b><extra>%{fullData.name}</extra>",
         )
     )
     fig5.update_layout(
@@ -811,6 +820,7 @@ with sub_risk:
             marker_color=["#3498DB", "#E67E22", "#C0392B"],
             text=[f"{fmt_wan(v)}" for v in df_rs["新月付金"]],
             textposition="outside",
+            hovertemplate="%{x}<br>月付金：<b>%{y:,.2f} 萬</b><extra></extra>",
         )
     )
     fig6.update_layout(
@@ -854,6 +864,7 @@ with sub_risk:
             marker_color=["#27AE60" if v > 0 else "#C0392B" for v in df_inc["新月現金流"]],
             text=[f"{fmt_wan(v)}" for v in df_inc["新月現金流"]],
             textposition="outside",
+            hovertemplate="%{x}<br>月現金流：<b>%{y:,.2f} 萬</b><extra></extra>",
         )
     )
     fig7.add_hline(y=0, line_dash="dash", line_color="red")
@@ -1788,6 +1799,7 @@ with sub_price:
             marker_color=["#C0392B", "#27AE60"],
             text=[f"{fmt_wan(total_max_price)}", f"{fmt_wan(total_target_price)}"],
             textposition="outside",
+            hovertemplate="%{x}：<b>%{y:,.1f} 萬</b><extra></extra>",
         )
     )
     fig_price.update_layout(
