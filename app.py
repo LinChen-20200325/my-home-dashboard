@@ -112,7 +112,49 @@ with st.sidebar:
         )
 
     with st.expander("💸 每月支出（不含房貸）", expanded=True):
-        st.caption("房貸另在『基本資料』分頁的房屋條件中計算，這裡只填非房貸的固定支出。")
+        st.caption("房貸另在『基本資料』分頁的房屋條件中計算。以下七項分開填寫，避免漏算。")
+        monthly_rent = st.number_input(
+            "房租（買房後此欄歸零，房貸另計）",
+            0,
+            value=0,
+            step=1_000,
+            help="目前若還在租屋，請填每月房租。買房之後此欄歸零，房貸金額會由『基本資料』分頁自動計算。",
+        )
+        monthly_filial = st.number_input(
+            "孝親費／長輩生活費",
+            0,
+            value=0,
+            step=1_000,
+            help="每月固定給父母、長輩的金額。若是不定期才給，請以全年總額 ÷12 換算。",
+        )
+        monthly_staff = st.number_input(
+            "雇用人員薪資（家事員／看護／保母）",
+            0,
+            value=0,
+            step=1_000,
+            help="支付給家事服務員、看護、保母、家教等人員的固定月薪。",
+        )
+        monthly_insurance = st.number_input(
+            "保險費（月攤）",
+            0,
+            value=0,
+            step=500,
+            help="壽險、醫療險、意外險、車險等所有保單的年保費總和 ÷12。",
+        )
+        monthly_tuition = st.number_input(
+            "學費（自己進修／子女教育）",
+            0,
+            value=0,
+            step=1_000,
+            help="自己的進修課程、子女學費、補習費、才藝班等教育支出。一學期繳一次的請 ÷月份數。",
+        )
+        monthly_living = st.number_input(
+            "生活開銷（食衣行育樂）",
+            0,
+            value=25_000,
+            step=1_000,
+            help="日常吃喝、交通、水電瓦斯、通訊、娛樂、治裝等扣除上述項目後的所有開銷。",
+        )
         monthly_bad_debt = st.number_input(
             "壞債支出（信貸／車貸／卡循／現金卡）",
             0,
@@ -120,15 +162,9 @@ with st.sidebar:
             step=1_000,
             help="每月需固定還款的高利率負債：信用貸款、車貸、信用卡循環利息、現金卡。房貸不算。",
         )
-        monthly_living = st.number_input(
-            "生活開銷（含保險娛樂、孝親費）",
-            0,
-            value=25_000,
-            step=1_000,
-            help="日常吃喝、交通、水電瓦斯、通訊、保險費月攤、娛樂、孝親費等扣除房貸與壞債後的所有開銷。",
-        )
         st.markdown(
-            f"**合計每月固定支出：NT$ {monthly_bad_debt + monthly_living:,.0f}**"
+            f"**合計每月固定支出：NT$ "
+            f"{monthly_rent + monthly_filial + monthly_staff + monthly_insurance + monthly_tuition + monthly_living + monthly_bad_debt:,.0f}**"
         )
 
     with st.expander("🏦 財力證明", expanded=False):
@@ -139,7 +175,10 @@ with st.sidebar:
 
 # ===================== 共用核心計算（僅依賴側邊欄）=====================
 total_monthly_income = monthly_salary + annual_bonus / 12 + other_income
-total_monthly_expense = monthly_living + monthly_bad_debt
+monthly_non_living = (
+    monthly_rent + monthly_filial + monthly_staff + monthly_insurance + monthly_tuition
+)
+total_monthly_expense = monthly_living + monthly_bad_debt + monthly_non_living
 monthly_surplus = total_monthly_income - total_monthly_expense
 bad_debt_ratio = monthly_bad_debt / total_monthly_income if total_monthly_income > 0 else 0.0
 age_plus_loan = age + loan_years
@@ -481,9 +520,9 @@ with sub_cash:
     st.caption("公式來源：Excel 現金流分析（無寬限期）— 月/年現金流、累積現金流、負擔率。")
 
     # 兩種情境：寬限期內（只繳利息）vs 寬限期後（本息攤還）
-    cf_grace = total_monthly_income - grace_payment - monthly_living - monthly_bad_debt
-    cf_post = total_monthly_income - post_grace_payment - monthly_living - monthly_bad_debt
-    cf_avg = total_monthly_income - avg_monthly_payment - monthly_living - monthly_bad_debt
+    cf_grace = total_monthly_income - grace_payment - monthly_living - monthly_non_living - monthly_bad_debt
+    cf_post = total_monthly_income - post_grace_payment - monthly_living - monthly_non_living - monthly_bad_debt
+    cf_avg = total_monthly_income - avg_monthly_payment - monthly_living - monthly_non_living - monthly_bad_debt
 
     burden_grace = grace_payment / total_monthly_income if total_monthly_income > 0 else 0
     burden_post = post_grace_payment / total_monthly_income if total_monthly_income > 0 else 0
@@ -507,15 +546,16 @@ with sub_cash:
     st.markdown("##### 📊 月現金流結構（含房貸 vs 不含房貸）")
     cf_breakdown = pd.DataFrame(
         {
-            "項目": ["月收入", "月生活費", "月壞債", "月房貸（寬限期）", "月房貸（寬限後）"],
+            "項目": ["月收入", "月生活費", "月其他固定支出", "月壞債", "月房貸（寬限期）", "月房貸（寬限後）"],
             "金額": [
                 total_monthly_income,
                 -monthly_living,
+                -monthly_non_living,
                 -monthly_bad_debt,
                 -grace_payment,
                 -post_grace_payment,
             ],
-            "類別": ["收入", "支出", "支出", "寬限期支出", "寬限後支出"],
+            "類別": ["收入", "支出", "支出", "支出", "寬限期支出", "寬限後支出"],
         }
     )
     fig3 = go.Figure(
@@ -756,7 +796,7 @@ with sub_risk:
     inc_scenarios = []
     for pct, label in [(1.0, "正常收入"), (0.8, "收入 -20%"), (0.7, "收入 -30%")]:
         new_income = total_monthly_income * pct
-        new_cf = new_income - post_grace_payment - monthly_living - monthly_bad_debt
+        new_cf = new_income - post_grace_payment - monthly_living - monthly_non_living - monthly_bad_debt
         inc_scenarios.append(
             {
                 "情境": label,
