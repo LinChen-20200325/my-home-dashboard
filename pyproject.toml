@@ -1,0 +1,42 @@
+# 房產攻略 — Python 專案配置（mypy 用，未來可擴充 ruff / black）。
+#
+# 注意：本檔不做 packaging — 沒有 [project] 區段。Streamlit App 部署無需
+# build wheel，只需 streamlit run。
+
+# ============================================================
+# mypy 靜態型別檢核
+# ============================================================
+[tool.mypy]
+python_version = "3.11"
+files = ["app/"]
+# 第三方依賴（streamlit / plotly / openai）的 stubs 不一定齊全，先忽略
+ignore_missing_imports = true
+# 從 baseline 寬鬆起步，未來可逐步收緊（warn_unused_ignores 等）
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_no_return = true
+# 排除目錄
+exclude = [
+    "_legacy/",
+    "tests/",
+    "build/",
+    "dist/",
+]
+
+# 對 tests/ 採更寬鬆設定（fixture / monkeypatch 等動態行為很多）
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+# 第三方無 stubs 的套件明確列出，提高 grep-ability
+[[tool.mypy.overrides]]
+module = [
+    "streamlit",
+    "streamlit.*",
+    "plotly",
+    "plotly.*",
+    "openai",
+    "openai.*",
+]
+ignore_missing_imports = true

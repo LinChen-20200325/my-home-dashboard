@@ -46,6 +46,9 @@ jobs:
       - name: Run pytest
         run: pytest --tb=short
 
+      - name: Run mypy static type check
+        run: mypy
+
       - name: AST sanity check (all .py files parse)
         run: |
           python -c "

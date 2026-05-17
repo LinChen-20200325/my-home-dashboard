@@ -2,3 +2,6 @@
 
 # Test runner（services / repositories pure-function 測試）
 pytest>=9.0
+
+# 靜態型別檢核（config 在 pyproject.toml [tool.mypy]）
+mypy>=1.18

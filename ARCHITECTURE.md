@@ -1,10 +1,33 @@
-# 房產攻略 — 分層架構藍圖（Layered Architecture Blueprint）
+# 房產攻略 — 分層架構（Layered Architecture）
 
-> 本文件為「重構藍圖」階段產出，**Phase 1 only**。任何實際搬遷需經明確同意。
+> **Phase 1 規劃 + Phase 2 完成現況**。本文件同時作為**歷史藍圖**與**現役架構參考**。
 
 ---
 
-## 1. 現況問題（Why refactor）
+## 🚦 整體狀態（2026-05-17 截止）
+
+| Phase | 內容 | 狀態 | 對應 PR |
+|---|---|---|---|
+| **Phase 1** | 藍圖規劃（本文件原版）| ✅ 完成 | commit `162cc0c` |
+| **Phase 2** | 33 步搬遷（藍圖 → 實作）| ✅ **33 / 33** | PR #9, #10, #11, #12, #13 |
+| **Phase 3** | 部署 / 測試 / 工具收尾 | 🚧 **14 / 22**（持續中）| PR #14-#19, …|
+
+### Phase 2 成就
+
+- 4 個 layer 全建立：`app/{models,services,repositories,ui}`
+- 10 個 pure-function services（cashflow / pricing / tenant_radar / liquidity / tax / leverage / decision_engine / presale_filter / mortgage / ai_advisor）
+- 2 個 repositories（secrets / openai_client）
+- 14 個 UI pages 從根目錄 chapter/strategy 檔案搬遷到 `app/ui/pages/`
+- 33 行 composition root（`main.py`）— 從 71 行縮減
+- 223 pytest tests pass in 0.21s — 含 1 個 service / repository 都有覆蓋
+- GitHub Actions CI + AST sanity + mypy 整合
+- Legacy `app.py`（1,918 行）退役到 `_legacy/`
+
+---
+
+## 1. 重構動機（Why refactor）— 歷史紀錄
+
+**重構前（Phase 1 起點）：**
 
 ```
 my-house-2026/
@@ -13,79 +36,48 @@ my-house-2026/
 ├── strategy_macro.py             # 同上
 ├── strategy_negotiation.py       # 同上
 ├── strategy_syndication.py       # 同上
-├── app.py                        # 1,918 行 legacy：PMT / 攤還 / 試算（尚未掛載）
+├── app.py                        # 1,918 行 legacy：PMT / 攤還 / 試算（未掛載）
 └── requirements.txt
 ```
 
-每個 `chapter_*.py` 都同時做了：
+每個 `chapter_*.py` 同時做了：
 1. **UI 渲染**（`st.title`, `st.metric`, `st.checkbox` …）
 2. **商業邏輯**（DTI 計算、租金係數、判定門檻）
 3. **常數定義**（學長硬性門檻散落 14 個檔案）
 4. **資料存取**（`chapter_9.py` 直接 import openai SDK + 讀 secrets）
 
-> **痛點**：改 UI 必須讀公式、改公式必須讀 UI；公式重複定義（同一個 DTI 紅線 0.70 寫了兩三次）；OpenAI 呼叫無法被測試；無法接 unit test。
+**痛點**：改 UI 必須讀公式、改公式必須讀 UI；公式重複定義（DTI 紅線 0.70 寫了兩三次）；OpenAI 呼叫無法被測試；無法接 unit test。
 
 ---
 
-## 2. 目標分層結構
+## 2. 最終分層結構（已實現）
 
 ```
 my-house-2026/
-├── app/
-│   ├── ui/                          ← Presentation Layer
-│   │   ├── pages/                   ← 一個 .py 對應一個側邊欄頁面
-│   │   │   ├── chapter_1_cashflow.py
-│   │   │   ├── chapter_2_presale.py
-│   │   │   ├── chapter_3_rental.py
-│   │   │   ├── chapter_4_refinance.py
-│   │   │   ├── chapter_5_resale.py
-│   │   │   ├── chapter_6_tax.py
-│   │   │   ├── chapter_7_exit.py
-│   │   │   ├── chapter_8_advanced.py
-│   │   │   ├── chapter_9_ai.py
-│   │   │   ├── chapter_10_decision.py
-│   │   │   ├── chapter_11_combat.py
-│   │   │   ├── strategy_macro.py
-│   │   │   ├── strategy_negotiation.py
-│   │   │   └── strategy_syndication.py
-│   │   ├── components/              ← 共用 Streamlit widget
-│   │   │   ├── verdict.py           ← 一刀斃命/警告/綠燈 block
-│   │   │   └── metric_grid.py
-│   │   └── router.py                ← CHAPTERS dict + sidebar
-│   │
-│   ├── services/                    ← Business Logic Layer（純 Python，禁 streamlit）
-│   │   ├── cashflow.py              ← DTI / 淨現金流 / 中產毒藥
-│   │   ├── pricing.py               ← 滿租定價 / 議價底價
-│   │   ├── mortgage.py              ← PMT / 攤還 / 超額增貸（從 legacy app.py）
-│   │   ├── tenant_radar.py          ← 七道信用防線評分
-│   │   ├── liquidity.py             ← 老屋脫手紅線 / 自用 5 年鐵證
-│   │   ├── tax.py                   ← 裝潢白名單 / 重購退稅
-│   │   ├── leverage.py              ← M2 燃料 / 增貸 / 股票質押 / 合資套利
-│   │   ├── decision_engine.py       ← Ch.10 四象限判定
-│   │   ├── presale_filter.py        ← 建商體質 / 梯戶比 / 合約地雷
-│   │   └── ai_advisor.py            ← 對話編排（system prompt + history）
-│   │
-│   ├── repositories/                ← Data Access Layer（外部 I/O）
-│   │   ├── openai_client.py         ← OpenAI SDK 包裝 + streaming
-│   │   └── secrets.py               ← st.secrets / sidebar 雙來源
-│   │
-│   ├── models/                      ← Domain Models（dataclass DTO）
-│   │   ├── property.py              ← PropertySpec, PriceInfo
-│   │   ├── tenant.py                ← CreditDefenseScore
-│   │   ├── cashflow.py              ← CashflowSnapshot, DTIVerdict
-│   │   ├── ai.py                    ← ChatMessage, ChatTurn
-│   │   └── constants.py             ← 學長硬性門檻 SSOT
-│   │
-│   └── main.py                      ← Composition root（set_page_config + router）
-│
-├── tests/                           ← （可選）pytest 單元測試
-│   ├── services/
-│   └── models/
-│
-├── app.py                           ← 🚧 LEGACY（待退役）
-├── requirements.txt
-├── ARCHITECTURE.md
-└── STATE.md
+├── main.py / app.py / streamlit_app.py    ← 三個等價入口（composition root）
+├── chapter_*.py / strategy_*.py           ← 14 個 thin re-export wrappers
+├── app/                                   ← 真正的四層架構
+│   ├── ui/
+│   │   ├── pages/                         ← 14 個純 Streamlit 頁面
+│   │   ├── components/                    ← verdict + metric_grid
+│   │   └── router.py                      ← CHAPTERS dict + sidebar + run()
+│   ├── services/                          ← 10 個 pure-function 模組
+│   ├── repositories/                      ← secrets + openai_client
+│   └── models/                            ← 4 DTO + constants.py SSOT
+├── tests/                                 ← 223 pytest tests
+│   ├── services/                          ← 10 test modules
+│   └── repositories/                      ← 2 test modules
+├── _legacy/
+│   ├── app.py                             ← 1,918 行原版（退役）
+│   └── README.md
+├── .streamlit/secrets.toml.example
+├── .github/workflows/test.yml             ← CI（pytest + mypy + AST）
+├── pyproject.toml                         ← mypy config
+├── pytest.ini                             ← pytest config
+├── requirements.txt / requirements-dev.txt
+├── README.md
+├── ARCHITECTURE.md                        ← 本檔
+└── STATE.md                               ← Phase 2 33-step Todo (all done)
 ```
 
 ---
@@ -93,6 +85,7 @@ my-house-2026/
 ## 3. 各層嚴格職責（Strict Responsibilities）
 
 ### 3.1 UI Layer (`app/ui/`)
+
 | 允許 | 嚴禁 |
 |---|---|
 | ✅ Streamlit 元件（title/metric/checkbox/error） | ❌ 寫公式（DTI、套利、增貸） |
@@ -100,7 +93,10 @@ my-house-2026/
 | ✅ 接收 Service 回傳 DTO → 渲染 | ❌ 直接讀 secrets |
 | ✅ 版型編排（columns / tabs / expander） | ❌ 跨頁 import 別頁 widget |
 
+**唯一例外**：`chapter_9_ai.py` 是唯一觸碰 `app.repositories.secrets` 的 UI 檔案，因為它需要對 API key 缺失做 UI 提示（這是合理的 UI 行為）。OpenAI SDK 呼叫仍經由 `services.ai_advisor` 中介。
+
 ### 3.2 Service Layer (`app/services/`)
+
 | 允許 | 嚴禁 |
 |---|---|
 | ✅ 純 Python 函式 / pure functions | ❌ `import streamlit` |
@@ -108,14 +104,20 @@ my-house-2026/
 | ✅ 商業判定（學長心法、公式） | ❌ 直接呼叫 OpenAI SDK |
 | ✅ 呼叫 repositories 取資料 | ❌ 跨 service 反向依賴 |
 
+**Phase 2 達成**：mypy 確認 0 errors 跨 41 個 source files；所有 services 通過 AST 掃描，零 streamlit / openai 直接 import。
+
 ### 3.3 Repository Layer (`app/repositories/`)
+
 | 允許 | 嚴禁 |
 |---|---|
 | ✅ 包裝外部 SDK（openai、未來 DB） | ❌ 寫商業邏輯（如要重試幾次） |
 | ✅ Raw response → model DTO 轉換 | ❌ 印任何 UI 元素 |
 | ✅ 處理連線錯誤、retry、timeout | ❌ 知道誰要呼叫它 |
 
+**唯一例外**：`secrets.py` lazy-imports streamlit（因為 `st.secrets` 是 Streamlit 提供的外部設定存取入口），但**只讀 `st.secrets`，禁止呼叫任何 UI 渲染函式**。AST scan + 8 個 pytest 確保此邊界。
+
 ### 3.4 Models Layer (`app/models/`)
+
 | 允許 | 嚴禁 |
 |---|---|
 | ✅ `@dataclass(frozen=True)` 定義型別 | ❌ import 其他層 |
@@ -130,47 +132,74 @@ my-house-2026/
     └────► Models ◄──────────┘
 ```
 
-- UI **永遠不可直接** import repositories
+- UI **永遠不可直接** import repositories（**例外**：chapter_9_ai 的 secrets 讀取）
 - Models 不依賴任何層
-- 違反方向 → import 時會 circular，CI 應該 fail
+- 違反方向 → import 時會 circular，AST sanity + mypy 雙重把關
 
 ---
 
-## 4. 搬遷地圖（Module Migration Map）
+## 4. 搬遷地圖 — 實際成果（已完成）
 
-| 現有檔案 | UI 落點 | Service 拆分 | Repository / Model |
-|---|---|---|---|
-| `main.py` | `app/main.py` + `app/ui/router.py` | — | — |
-| `chapter_1.py` | `ui/pages/chapter_1_cashflow.py` | `services/cashflow.py` + `services/leverage.py` (M2) | `models/cashflow.py` |
-| `chapter_2.py` | `ui/pages/chapter_2_presale.py` | `services/presale_filter.py` | `models/property.py` |
-| `chapter_3.py` | `ui/pages/chapter_3_rental.py` | `services/pricing.py` + `services/tenant_radar.py` | `models/tenant.py` |
-| `chapter_4.py` | `ui/pages/chapter_4_refinance.py` | `services/leverage.py` (增貸 + 科目四) | `models/property.py` |
-| `chapter_5.py` | `ui/pages/chapter_5_resale.py` | `services/liquidity.py` (地雷 + SOP) | — |
-| `chapter_6.py` | `ui/pages/chapter_6_tax.py` | `services/tax.py` + `services/leverage.py` (股票質押) | — |
-| `chapter_7.py` | `ui/pages/chapter_7_exit.py` | `services/liquidity.py` (脫手紅線 + 鐵證) | — |
-| `chapter_8.py` | `ui/pages/chapter_8_advanced.py` | `services/presale_filter.py` + `services/leverage.py` (空租準備金) | — |
-| `chapter_9.py` | `ui/pages/chapter_9_ai.py` | `services/ai_advisor.py` | `repositories/openai_client.py` + `repositories/secrets.py` + `models/ai.py` |
-| `chapter_10.py` | `ui/pages/chapter_10_decision.py` | `services/decision_engine.py` | — |
-| `chapter_11.py` | `ui/pages/chapter_11_combat.py` | UI-only（無公式） | — |
-| `strategy_macro.py` | `ui/pages/strategy_macro.py` | `services/leverage.py` (M2/M1B 黃金交叉) | — |
-| `strategy_negotiation.py` | `ui/pages/strategy_negotiation.py` | `services/pricing.py` (議價戰術) | — |
-| `strategy_syndication.py` | `ui/pages/strategy_syndication.py` | `services/leverage.py` (合資套利 + 防護鎖) | — |
-| `app.py` (legacy) | （捨棄或保留為 `ui/pages/legacy_full.py`） | `services/mortgage.py` (PMT / 攤還) | — |
+| 原檔（重構前）| → | 拆分結果 |
+|---|---|---|
+| `main.py` (71 行) | → | `main.py` (33 行 composition root) + `app/ui/router.py` (CHAPTERS + sidebar) |
+| `chapter_1.py` | → | `app/ui/pages/chapter_1_cashflow.py` + `services/cashflow.py` + `services/leverage.py` (M2) + `models/cashflow.py` |
+| `chapter_2.py` | → | `app/ui/pages/chapter_2_presale.py` + `services/presale_filter.py` |
+| `chapter_3.py` | → | `app/ui/pages/chapter_3_rental.py` + `services/pricing.py` + `services/tenant_radar.py` + `models/tenant.py` |
+| `chapter_4.py` | → | `app/ui/pages/chapter_4_refinance.py` + `services/leverage.py` (增貸 + 科目四) |
+| `chapter_5.py` | → | `app/ui/pages/chapter_5_resale.py` + `services/liquidity.py` (地雷 + SOP) |
+| `chapter_6.py` | → | `app/ui/pages/chapter_6_tax.py` + `services/tax.py` + `services/leverage.py` (股票質押) |
+| `chapter_7.py` | → | `app/ui/pages/chapter_7_exit.py` + `services/liquidity.py` (脫手 + 鐵證) |
+| `chapter_8.py` | → | `app/ui/pages/chapter_8_advanced.py` + `services/presale_filter.py` + `services/leverage.py` (空租) |
+| `chapter_9.py` | → | `app/ui/pages/chapter_9_ai.py` + `services/ai_advisor.py` + `repositories/openai_client.py` + `repositories/secrets.py` + `models/ai.py` |
+| `chapter_10.py` | → | `app/ui/pages/chapter_10_decision.py` + `services/decision_engine.py` |
+| `chapter_11.py` | → | `app/ui/pages/chapter_11_combat.py` (UI-only，無公式可抽) |
+| `strategy_macro.py` | → | `app/ui/pages/strategy_macro.py` + `services/leverage.py` (M2 黃金交叉) |
+| `strategy_negotiation.py` | → | `app/ui/pages/strategy_negotiation.py` + `services/pricing.py` (議價戰術) |
+| `strategy_syndication.py` | → | `app/ui/pages/strategy_syndication.py` + `services/leverage.py` (合資套利 + 防護鎖) |
+| `app.py` (legacy 1,918 行) | → | `_legacy/app.py` (退役) + `services/mortgage.py` (PMT / 攤還抽出) |
+
+**14 個 chapter / strategy 原檔縮成 ~20 行 thin re-export wrappers**，保留向後相容。
 
 ---
 
 ## 5. 為什麼這樣切？
 
-1. **Token 控管** — 改 UI 時不必再讀公式檔；改公式時不必再讀 UI 樣板。Claude/Codex 只讀「相關層」即可。
-2. **可測性** — services 是 pure functions，pytest 不啟動 Streamlit、不打 OpenAI 也能跑。
+1. **Token 控管** — 改 UI 時不必再讀公式檔；改公式時不必再讀 UI 樣板。Claude / Codex 只讀「相關層」即可。
+2. **可測性** — services 是 pure functions，pytest 不啟動 Streamlit、不打 OpenAI 也能跑（223 tests in 0.21s）。
 3. **AI 安全性** — OpenAI 呼叫集中在 `repositories/openai_client.py`，未來要加 rate limit / token budget / retry / spend cap 改一處即可。
 4. **未來擴展** — 若從 Streamlit 改 FastAPI + React，UI 層整層丟掉，services / repositories 完全不動。
-5. **SSOT (Single Source of Truth)** — `models/constants.py` 統一硬性門檻（`DTI_DANGER = 0.70`, `MIN_SAFE_PING = 15`, `EXIT_AGE_RED_LINE = 35`, `ELEVATOR_RATIO_DANGER = 4.0`），杜絕硬編碼漂移。
+5. **SSOT (Single Source of Truth)** — `models/constants.py` 統一硬性門檻（`DTI_DANGER_RATIO=0.70`, `MIN_SAFE_PING=15`, `EXIT_AGE_RED_LINE_YEARS=35`, `ELEVATOR_RATIO_DANGER=4.0`），杜絕硬編碼漂移。
 
 ---
 
-## 6. 接下來步驟
+## 6. Phase 3 進度（持續中）
 
-藍圖已備齊；逐步搬遷的 33 個 Todo 已寫入 [STATE.md](./STATE.md)。
+詳見 [`STATE.md`](./STATE.md) 末段「Phase 3 候選 Backlog」。
 
-**等待使用者明確同意（覆「同意」）後**，方可進入 Phase 2「逐層解耦與搬遷」。Phase 2 一次只動一個檔案，並執行『自我審核五步驟』（邏輯審查 → 邊界測試 → 效能評估 → Debug 修正 → 最終代碼）。
+### 已完成（14 / 22）
+
+| 類別 | 完成項目 |
+|---|---|
+| **測試擴充** | #34 leverage + #35-#42 全部剩餘 services / repositories |
+| **CI / 部署** | #43 GitHub Actions workflow / #44 README.md / #45 secrets.toml.example |
+| **品質工具** | #47 mypy 靜態型別檢核（本 PR）/ #55 ARCHITECTURE.md 更新（本 PR）|
+
+### 剩餘候選（8 項）
+
+| Priority | Item |
+|---|---|
+| 🟡 中 | #46 Dockerfile + `.dockerignore` |
+| 🟠 中高（公開部署前）| #51 AI token cost tracker / spend cap |
+| 🟠 中高 | #52 AI retry / rate-limit logic |
+| 🟢 低 | #48 Module-level 常數整合到 constants.py SSOT |
+| 🟢 低 | #53 Cross-chapter 跳轉（Ch.10 GREEN_LIGHT → Ch.4）|
+| ⚪ YAGNI | #49 Components 實際導入現有 UI |
+| ⚪ YAGNI | #50 Chapter 11 退回純文件 |
+| ⚪ YAGNI | #54 `_legacy/app.py` UI 復活評估 |
+
+---
+
+## 附錄：Phase 2 完整 33-step 紀錄
+
+詳見 [`STATE.md`](./STATE.md)。所有步驟皆嚴格遵守「**單檔單步 + 五項自我審核**」協定（邏輯審查 → 邊界測試 → 效能評估 → Debug → 最終代碼），每步皆對應一個 git commit。

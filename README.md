@@ -5,6 +5,7 @@
 [![tests](https://github.com/CornCorn-2015/my-house-2026/actions/workflows/test.yml/badge.svg)](https://github.com/CornCorn-2015/my-house-2026/actions/workflows/test.yml)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-FF4B4B?logo=streamlit)](https://streamlit.io/)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python)](https://www.python.org/)
+[![mypy](https://img.shields.io/badge/mypy-strict-2ea44f?logo=python)](./pyproject.toml)
 
 ---
 

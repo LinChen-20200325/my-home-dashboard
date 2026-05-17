@@ -283,7 +283,7 @@ class SafeguardCompleteness(NamedTuple):
 
 
 def diagnose_syndication_safeguards(
-    locks_checked: tuple[bool, bool, bool, bool],
+    locks_checked: tuple[bool, ...],
 ) -> SafeguardCompleteness:
     """4 鎖：奇數股東 / 二順位 / 預告登記 / 退場機制。任一缺即裸奔。"""
     in_place = sum(locks_checked)

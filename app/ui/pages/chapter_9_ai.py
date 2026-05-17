@@ -119,10 +119,13 @@ def render_chapter_9_ai() -> None:
     config = _render_sidebar_controls()
 
     # ----- session_state 初始化 -----
+    # Note: Streamlit's session_state attrs can't carry annotations directly
+    # (mypy: "Type cannot be declared in assignment to non-self attribute").
+    # Type intent: ch9_messages -> list[ChatMessage], ch9_pending_input -> str | None.
     if "ch9_messages" not in st.session_state:
-        st.session_state.ch9_messages: list[ChatMessage] = []
+        st.session_state.ch9_messages = []
     if "ch9_pending_input" not in st.session_state:
-        st.session_state.ch9_pending_input: str | None = None
+        st.session_state.ch9_pending_input = None
 
     # ----- API Key 缺失警告 -----
     if not config.is_ready:
