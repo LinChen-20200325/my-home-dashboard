@@ -109,18 +109,18 @@
   - `chapter_1.py` 縮為 thin wrapper（單行 re-export，` main.py` 不必改）
   - 10 項測試通過（AST 語法 + 層架構 + import 依賴 + 雙觸發行為保留）
 - [x] **#16** `app/ui/pages/chapter_2_presale.py` _(commit: batch with #19/#20/#21/#22)_
-- [ ] **#17** `app/ui/pages/chapter_3_rental.py`
-- [ ] **#18** `app/ui/pages/chapter_4_refinance.py`
+- [x] **#17** `app/ui/pages/chapter_3_rental.py` _(commit: Batch 2 PR)_
+- [x] **#18** `app/ui/pages/chapter_4_refinance.py` _(commit: Batch 2 PR)_
 - [x] **#19** `app/ui/pages/chapter_5_resale.py` _(commit: batch with #16/#20/#21/#22)_
 - [x] **#20** `app/ui/pages/chapter_6_tax.py` _(commit: batch with #16/#19/#21/#22)_
 - [x] **#21** `app/ui/pages/chapter_7_exit.py` _(commit: batch with #16/#19/#20/#22)_
 - [x] **#22** `app/ui/pages/chapter_8_advanced.py` _(commit: batch with #16/#19/#20/#21)_
 - [ ] **#23** `app/ui/pages/chapter_9_ai.py`
-- [ ] **#24** `app/ui/pages/chapter_10_decision.py`
-- [ ] **#25** `app/ui/pages/chapter_11_combat.py`
-- [ ] **#26** `app/ui/pages/strategy_macro.py`
-- [ ] **#27** `app/ui/pages/strategy_negotiation.py`
-- [ ] **#28** `app/ui/pages/strategy_syndication.py`
+- [x] **#24** `app/ui/pages/chapter_10_decision.py` _(commit: Batch 2 PR)_
+- [x] **#25** `app/ui/pages/chapter_11_combat.py` _(commit: Batch 2 PR)_
+- [x] **#26** `app/ui/pages/strategy_macro.py` _(commit: Batch 2 PR)_
+- [x] **#27** `app/ui/pages/strategy_negotiation.py` _(commit: Batch 2 PR)_
+- [x] **#28** `app/ui/pages/strategy_syndication.py` _(commit: Batch 2 PR)_
 
 ### 🧩 F. 共用元件與 Router [2 steps]
 - [ ] **#29** `app/ui/components/verdict.py` + `metric_grid.py` — 抽出重複的 verdict block / metric 群組
