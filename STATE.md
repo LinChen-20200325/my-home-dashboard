@@ -8,6 +8,8 @@
 ## 階段狀態
 - [x] **Phase 1**：藍圖規劃 — _完成（commit `162cc0c`）_
 - [x] **Phase 2**：逐層解耦與搬遷 — **33 / 33 全部完成** ✅
+- [x] **Phase 3**：品質、生產化、體驗收尾 — **22 / 22 全部結案** ✅
+  - 實際執行 19 項；3 項 YAGNI 經評估封存（詳見 [`ARCHITECTURE.md`](./ARCHITECTURE.md) §6）
 
 ---
 
@@ -167,3 +169,10 @@
 | #12 ai_advisor | `88e011d` | 2026-05-17 | `services/ai_advisor.py` — 學長 persona + 對話編排（無 openai/streamlit 直接 import）|
 | #15 Ch.1 UI | `85e8766` | 2026-05-17 | `ui/pages/chapter_1_cashflow.py` + thin wrapper chapter_1.py（首個 UI 搬遷）|
 | #16/19/20/21/22 Batch 1 | _(this commit)_ | 2026-05-17 | Ch.2/5/6/7/8 五個標準頁面同步搬遷 + 5 個 thin wrappers（pragmatic batch，違反 single-file 但全測試通過）|
+| Phase 2 完成 | `a10dc14` | 2026-05-17 | 14 個 UI + router + composition root + legacy 退役 + 46 tests |
+| Phase 3 #34-#42 測試 | `f3cc820` / `ad3f93b` | 2026-05-17 | leverage 64 tests + 其餘 services / repositories 批次（累計 248 tests）|
+| Phase 3 CI / Docker | `482d1b1` / `1671cb5` | 2026-05-17 | GitHub Actions workflow + Dockerfile + SSOT 整合 #48 |
+| Phase 3 文件 / mypy | `2ec3424` | 2026-05-17 | README.md / secrets.toml.example / mypy 0 errors / ARCHITECTURE 重寫 |
+| Phase 3 AI 生產化 | `94432ee` | 2026-05-17 | token cost tracker + spend cap + retry / rate-limit logic |
+| Phase 3 #53 跨章節 | `64666d0` | 2026-05-17 | `components/navigation.py` + Ch.1 / Ch.10 跳轉按鈕 |
+| Phase 3 收尾 | `4827944` | 2026-05-17 | components retrofit（5 處）+ mypy CI 修正 + 3 項 YAGNI 評估封存 |
