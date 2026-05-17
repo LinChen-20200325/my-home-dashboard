@@ -1,7 +1,7 @@
 """AI 顧問對話 DTO（Ch.9 主要使用）。
 
-注意：本模組僅定義資料型別，**不**依賴 openai SDK。
-OpenAI 呼叫由 `app/repositories/openai_client.py` 負責。
+注意：本模組僅定義資料型別，**不**依賴任何 AI SDK（openai / google-genai）。
+SDK 呼叫由 `app/repositories/{openai,gemini}_client.py` 各自負責。
 """
 
 from __future__ import annotations
@@ -15,8 +15,15 @@ from app.models.constants import (
 )
 
 
+class AIProvider(str, Enum):
+    """支援的 AI 顧問服務商。"""
+
+    OPENAI = "openai"
+    GEMINI = "gemini"
+
+
 class ChatRole(str, Enum):
-    """OpenAI chat completion 的三種角色。"""
+    """對話角色（OpenAI / Gemini 共用語意，repository 層各自轉成 SDK 格式）。"""
 
     SYSTEM = "system"
     USER = "user"
@@ -40,11 +47,13 @@ class AIConfig:
     """AI 呼叫設定。
 
     api_key 為空字串 → repository 層應視為『尚未提供』並拒絕呼叫。
+    provider 決定走 OpenAI 還是 Gemini 後端；model / temperature 須與 provider 相容。
     """
 
     api_key: str
     model: str = OPENAI_DEFAULT_MODEL
     temperature: float = OPENAI_DEFAULT_TEMPERATURE
+    provider: AIProvider = AIProvider.OPENAI
 
     @property
     def is_ready(self) -> bool:

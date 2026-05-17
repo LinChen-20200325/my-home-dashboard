@@ -3,20 +3,31 @@
 職責：
     - 提供學長 persona 系統提示語（MENTOR_SYSTEM_PROMPT）
     - 將系統提示語注入對話歷史前端
-    - 委派串流給 repositories.openai_client（不直接接觸 OpenAI SDK）
+    - 依 ``AIConfig.provider`` 分派到 ``repositories.openai_client`` 或
+      ``repositories.gemini_client``（不直接接觸任何 SDK）
 
 層架構：
-    services 層 — 嚴禁 import streamlit / openai。
-    僅依賴 app.models.ai + app.repositories.openai_client。
+    services 層 — 嚴禁 import streamlit / openai / google-genai。
+    僅依賴 app.models.ai + app.repositories.{openai,gemini}_client。
 """
 
 from __future__ import annotations
 
-from typing import Iterable, Iterator
+from typing import Iterable
 
-from app.models.ai import AIConfig, ChatMessage, ChatRole, TokenUsage, UsageStats
-from app.models.constants import OPENAI_PRICING_USD_PER_MILLION_TOKENS
-from app.repositories.openai_client import stream_chat_completion
+from app.models.ai import (
+    AIConfig,
+    AIProvider,
+    ChatMessage,
+    ChatRole,
+    TokenUsage,
+    UsageStats,
+)
+from app.models.constants import (
+    GEMINI_PRICING_USD_PER_MILLION_TOKENS,
+    OPENAI_PRICING_USD_PER_MILLION_TOKENS,
+)
+from app.repositories import gemini_client, openai_client
 
 
 # ===== 學長 Persona — 模組級常數 =====
@@ -94,34 +105,48 @@ def stream_mentor_reply(
 ) -> Iterable[str]:
     """以學長 persona 串流回覆使用者最新訊息。
 
+    依 ``config.provider`` 分派到 OpenAI 或 Gemini repository。
+
     Args:
-        config:  OpenAI 設定（api_key / model / temperature）。
+        config:  AI 設定（api_key / model / temperature / provider）。
         history: 對話歷史 DTO 列表（最後一則應為使用者剛送出的訊息）。
                  system message **不需** 由呼叫端注入，本函式自動 prepend。
 
     Returns:
-        Iterable of content chunks. 若 repository 回傳 ``UsageTrackingStream``，
-        呼叫端可在迭代完成後讀取 ``.usage`` 屬性取得 token 用量。
+        Iterable of content chunks。回傳的物件同時為 ``UsageTrackingStream``
+        實例（依 provider 由各自的 repository 提供），呼叫端可在迭代完成後讀
+        取 ``.usage`` 屬性取得 token 用量。
 
     Raises:
-        RuntimeError: openai 套件未安裝（由 repository 翻譯）。
-        openai.OpenAIError 及其子類: API 端錯誤（原型 propagate）。
+        RuntimeError: 對應 provider 的 SDK 套件未安裝（由 repository 翻譯）。
+        SDK 例外: API 端錯誤（原型 propagate）。
     """
     full_chain = build_message_chain(history)
-    return stream_chat_completion(config, full_chain)
+    if config.provider == AIProvider.GEMINI:
+        return gemini_client.stream_chat_completion(config, full_chain)
+    return openai_client.stream_chat_completion(config, full_chain)
 
 
 # ============================================================
 # 成本追蹤 — pure functions
 # ============================================================
-def estimate_cost_usd(usage: TokenUsage, model: str) -> float:
-    """根據 OpenAI 公告價計算單次呼叫的 USD 成本。
+def _pricing_table_for(provider: AIProvider) -> dict[str, dict[str, float]]:
+    """依 provider 取對應的單價表。"""
+    if provider == AIProvider.GEMINI:
+        return GEMINI_PRICING_USD_PER_MILLION_TOKENS
+    return OPENAI_PRICING_USD_PER_MILLION_TOKENS
+
+
+def estimate_cost_usd(
+    usage: TokenUsage, model: str, provider: AIProvider = AIProvider.OPENAI,
+) -> float:
+    """根據 provider 對應的公告價計算單次呼叫的 USD 成本。
 
     Raises:
-        KeyError: 若 model 不在 ``OPENAI_PRICING_USD_PER_MILLION_TOKENS`` 內。
+        KeyError: 若 model 不在該 provider 的單價表內。
                   呼叫端應使用 SSOT 中已登錄的模型名稱。
     """
-    pricing = OPENAI_PRICING_USD_PER_MILLION_TOKENS[model]
+    pricing = _pricing_table_for(provider)[model]
     return (
         usage.input_tokens / 1_000_000 * pricing["input"]
         + usage.output_tokens / 1_000_000 * pricing["output"]
@@ -129,13 +154,18 @@ def estimate_cost_usd(usage: TokenUsage, model: str) -> float:
 
 
 def accumulate_usage(
-    stats: UsageStats, usage: TokenUsage, model: str,
+    stats: UsageStats,
+    usage: TokenUsage,
+    model: str,
+    provider: AIProvider = AIProvider.OPENAI,
 ) -> UsageStats:
     """把單次 token 用量併入累計統計。回傳新的 UsageStats（不可變更新）。"""
     return UsageStats(
         total_input_tokens=stats.total_input_tokens + usage.input_tokens,
         total_output_tokens=stats.total_output_tokens + usage.output_tokens,
-        total_cost_usd=stats.total_cost_usd + estimate_cost_usd(usage, model),
+        total_cost_usd=(
+            stats.total_cost_usd + estimate_cost_usd(usage, model, provider)
+        ),
         call_count=stats.call_count + 1,
     )
 

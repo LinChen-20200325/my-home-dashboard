@@ -1,15 +1,24 @@
 """Unit tests — app.services.ai_advisor（對話編排 + persona prompt）。
 
-ai_advisor 不直接接 OpenAI SDK；OpenAI 互動由 repositories.openai_client 負責。
-本測試模組 monkey-patch `stream_chat_completion` 把整個 SDK 鏈路切斷，
-專注驗證 service 自己的編排邏輯。
+ai_advisor 不直接接任何 SDK；OpenAI / Gemini 互動分別由
+``repositories.openai_client`` 與 ``repositories.gemini_client`` 負責。
+本測試模組 monkey-patch 兩個 repository 的 ``stream_chat_completion``
+把整個 SDK 鏈路切斷，專注驗證 service 自己的編排邏輯。
 """
 
 from __future__ import annotations
 
 import pytest
 
-from app.models.ai import AIConfig, ChatMessage, ChatRole, TokenUsage, UsageStats
+from app.models.ai import (
+    AIConfig,
+    AIProvider,
+    ChatMessage,
+    ChatRole,
+    TokenUsage,
+    UsageStats,
+)
+from app.repositories import gemini_client, openai_client
 from app.services import ai_advisor
 from app.services.ai_advisor import (
     MENTOR_SYSTEM_PROMPT,
@@ -72,7 +81,7 @@ class TestMentorSystemPrompt:
 
 
 # ============================================================
-# stream_mentor_reply — 串流委派（mock OpenAI）
+# stream_mentor_reply — 串流委派（mock OpenAI / Gemini repository）
 # ============================================================
 class TestStreamMentorReply:
     def test_returns_iterable(
@@ -80,7 +89,7 @@ class TestStreamMentorReply:
     ) -> None:
         """stream_mentor_reply 委派給 repository，回傳物件需可被迭代。"""
         monkeypatch.setattr(
-            ai_advisor, "stream_chat_completion",
+            openai_client, "stream_chat_completion",
             lambda c, m: iter(["chunk1", "chunk2"]),
         )
         result = stream_mentor_reply(AIConfig(api_key="sk-test"), [])
@@ -97,7 +106,7 @@ class TestStreamMentorReply:
             called.append(True)
             yield "x"
 
-        monkeypatch.setattr(ai_advisor, "stream_chat_completion", fake_stream)
+        monkeypatch.setattr(openai_client, "stream_chat_completion", fake_stream)
         gen = stream_mentor_reply(AIConfig(api_key="sk-test"), [])
         assert called == []  # 未消費 generator 前不該觸發
         next(gen)
@@ -115,7 +124,7 @@ class TestStreamMentorReply:
             yield ", "
             yield "world!"
 
-        monkeypatch.setattr(ai_advisor, "stream_chat_completion", fake_stream)
+        monkeypatch.setattr(openai_client, "stream_chat_completion", fake_stream)
         cfg = AIConfig(api_key="sk-test")
         user_msg = ChatMessage(ChatRole.USER, "test")
         result = list(stream_mentor_reply(cfg, [user_msg]))
@@ -135,7 +144,7 @@ class TestStreamMentorReply:
             seen_configs.append(config)
             yield ""
 
-        monkeypatch.setattr(ai_advisor, "stream_chat_completion", fake_stream)
+        monkeypatch.setattr(openai_client, "stream_chat_completion", fake_stream)
         cfg = AIConfig(api_key="sk-test", model="gpt-4o", temperature=0.3)
         list(stream_mentor_reply(cfg, []))
         assert len(seen_configs) == 1
@@ -152,9 +161,57 @@ class TestStreamMentorReply:
             raise FakeRateLimitError("rate limit hit")
             yield  # pragma: no cover  (生成器需要 yield 才算 generator)
 
-        monkeypatch.setattr(ai_advisor, "stream_chat_completion", fake_stream)
+        monkeypatch.setattr(openai_client, "stream_chat_completion", fake_stream)
         with pytest.raises(FakeRateLimitError, match="rate limit"):
             list(stream_mentor_reply(AIConfig(api_key="sk-test"), []))
+
+    def test_dispatches_to_gemini_when_provider_is_gemini(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """config.provider=GEMINI 時應走 gemini_client，不該碰 openai_client。"""
+        openai_calls: list[bool] = []
+        gemini_calls: list[bool] = []
+
+        def fake_openai(config, messages):  # type: ignore[no-untyped-def]
+            openai_calls.append(True)
+            yield "from-openai"
+
+        def fake_gemini(config, messages):  # type: ignore[no-untyped-def]
+            gemini_calls.append(True)
+            yield "from-gemini"
+
+        monkeypatch.setattr(openai_client, "stream_chat_completion", fake_openai)
+        monkeypatch.setattr(gemini_client, "stream_chat_completion", fake_gemini)
+
+        cfg = AIConfig(
+            api_key="AIzaSy-test",
+            model="gemini-2.5-flash",
+            provider=AIProvider.GEMINI,
+        )
+        result = list(stream_mentor_reply(cfg, []))
+        assert result == ["from-gemini"]
+        assert gemini_calls == [True]
+        assert openai_calls == []  # OpenAI repo 不該被觸發
+
+    def test_dispatches_to_openai_by_default(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """未指定 provider 時應走 OpenAI（向後相容預設值）。"""
+        openai_calls: list[bool] = []
+        gemini_calls: list[bool] = []
+
+        monkeypatch.setattr(
+            openai_client, "stream_chat_completion",
+            lambda c, m: (openai_calls.append(True), iter(["x"]))[1],
+        )
+        monkeypatch.setattr(
+            gemini_client, "stream_chat_completion",
+            lambda c, m: (gemini_calls.append(True), iter(["x"]))[1],
+        )
+
+        list(stream_mentor_reply(AIConfig(api_key="sk-test"), []))
+        assert openai_calls == [True]
+        assert gemini_calls == []
 
 
 # ============================================================
@@ -183,6 +240,29 @@ class TestEstimateCostUsd:
         usage = TokenUsage(input_tokens=100, output_tokens=50, total_tokens=150)
         with pytest.raises(KeyError):
             estimate_cost_usd(usage, "fake-model-name")
+
+    def test_gemini_flash_pricing(self) -> None:
+        """gemini-2.5-flash: $0.30/M input, $2.50/M output (paid-tier rate)。
+        1000 input + 500 output = 0.0003 + 0.00125 = 0.00155 USD。"""
+        usage = TokenUsage(input_tokens=1000, output_tokens=500, total_tokens=1500)
+        cost = estimate_cost_usd(usage, "gemini-2.5-flash", AIProvider.GEMINI)
+        assert cost == pytest.approx(0.00155, abs=1e-9)
+
+    def test_gemini_unknown_model_raises_keyerror(self) -> None:
+        """provider=GEMINI 但 model 在 GEMINI 單價表外應拋 KeyError。"""
+        usage = TokenUsage(input_tokens=100, output_tokens=50, total_tokens=150)
+        with pytest.raises(KeyError):
+            estimate_cost_usd(usage, "gpt-4o-mini", AIProvider.GEMINI)
+
+    def test_provider_routing_isolated(self) -> None:
+        """同樣的 model 字串若搭配錯誤 provider 不該誤抓對方單價表。"""
+        usage = TokenUsage(input_tokens=1000, output_tokens=0, total_tokens=1000)
+        # gpt-4o-mini 只在 OPENAI 表，不在 GEMINI 表
+        with pytest.raises(KeyError):
+            estimate_cost_usd(usage, "gpt-4o-mini", AIProvider.GEMINI)
+        # gemini-2.5-flash 只在 GEMINI 表，不在 OPENAI 表
+        with pytest.raises(KeyError):
+            estimate_cost_usd(usage, "gemini-2.5-flash", AIProvider.OPENAI)
 
 
 # ============================================================
@@ -221,6 +301,17 @@ class TestAccumulateUsage:
     def test_total_tokens_property(self) -> None:
         stats = UsageStats(total_input_tokens=300, total_output_tokens=200)
         assert stats.total_tokens == 500
+
+    def test_gemini_provider_uses_gemini_pricing(self) -> None:
+        """accumulate_usage 傳 provider=GEMINI 時走 Gemini 單價表。"""
+        stats = UsageStats()
+        usage = TokenUsage(1000, 500, 1500)
+        new_stats = accumulate_usage(
+            stats, usage, "gemini-2.5-flash", AIProvider.GEMINI,
+        )
+        # 0.30/M * 1000 + 2.50/M * 500 = 0.0003 + 0.00125 = 0.00155
+        assert new_stats.total_cost_usd == pytest.approx(0.00155, abs=1e-9)
+        assert new_stats.call_count == 1
 
 
 # ============================================================

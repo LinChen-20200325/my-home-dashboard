@@ -1,15 +1,16 @@
 """Chapter 9 UI — 學長 AI 實戰顧問（重構後）。
 
 UI 層：純 Streamlit 對話介面；
+    - 雙 provider（OpenAI / Gemini）由 sidebar 切換
     - API Key 解析委派給 ``repositories.secrets.resolve_api_key``
     - 串流對話委派給 ``services.ai_advisor.stream_mentor_reply``
     - 訊息以 ``models.ai.ChatMessage`` DTO 儲存於 session_state
 
 依層架構：
-    UI 不直接 import openai。所有 SDK 互動經由 ai_advisor service
-    → openai_client repository 中介；只有 SDK 例外（OpenAI API errors）
-    會經由 ai_advisor.stream_mentor_reply 原型 propagate 上來，
-    本層用一個 broad except 翻譯成使用者友善訊息。
+    UI 不直接 import openai / google-genai。所有 SDK 互動經由 ai_advisor service
+    → openai_client / gemini_client repository 中介；只有 SDK 例外會經由
+    ai_advisor.stream_mentor_reply 原型 propagate 上來，本層用一個 broad except
+    翻譯成使用者友善訊息。
 """
 
 from __future__ import annotations
@@ -18,8 +19,12 @@ from typing import Literal
 
 import streamlit as st
 
-from app.models.ai import AIConfig, ChatMessage, ChatRole, UsageStats
+from app.models.ai import AIConfig, AIProvider, ChatMessage, ChatRole, UsageStats
 from app.models.constants import (
+    GEMINI_API_KEY_SECRET_NAME,
+    GEMINI_DEFAULT_MODEL,
+    GEMINI_FREE_TIER_MODELS,
+    GEMINI_MODEL_OPTIONS,
     OPENAI_API_KEY_SECRET_NAME,
     OPENAI_DEFAULT_MODEL,
     OPENAI_DEFAULT_SPEND_CAP_USD,
@@ -36,6 +41,13 @@ from app.services.ai_advisor import (
 )
 
 
+# ===== Provider 選項顯示（label → enum）=====
+_PROVIDER_LABELS: dict[str, AIProvider] = {
+    "🟢 Google Gemini（內建免費額度）": AIProvider.GEMINI,
+    "🔵 OpenAI GPT": AIProvider.OPENAI,
+}
+
+
 # ===== 起手式問題（給使用者一鍵發問，純 UI display data）=====
 STARTER_QUESTIONS: list[str] = [
     "學長，建商要我支付天然瓦斯與自來水管線費，這合理嗎？",
@@ -48,13 +60,47 @@ STARTER_QUESTIONS: list[str] = [
 
 
 def _render_sidebar_controls() -> tuple[AIConfig, float]:
-    """設定面板：API Key、模型、temperature、spend cap。回傳 (AIConfig, cap_usd)。"""
-    with st.expander("⚙️ **AI 顧問設定**（API Key / 模型 / 創意度 / 預算）", expanded=False):
+    """設定面板：Provider、API Key、模型、temperature、spend cap。
+
+    回傳 (AIConfig, cap_usd)。
+    """
+    with st.expander("⚙️ **AI 顧問設定**（服務商 / API Key / 模型 / 預算）", expanded=False):
+        # ----- Provider 選擇 -----
+        provider_label = st.radio(
+            "AI 服務商",
+            options=list(_PROVIDER_LABELS.keys()),
+            index=0,  # 預設 Gemini（內建免費額度）
+            horizontal=True,
+            help="Gemini 提供免費額度（限速），OpenAI 一律按 token 計費。",
+            key="ch9_provider",
+        )
+        provider = _PROVIDER_LABELS[provider_label]
+
+        # ----- 依 provider 切換對應的 secret name / model 預設 -----
+        if provider == AIProvider.GEMINI:
+            key_label = "🔑 Gemini API Key"
+            key_placeholder = "AIzaSy...（或設定於 .streamlit/secrets.toml）"
+            secret_name = GEMINI_API_KEY_SECRET_NAME
+            model_options = list(GEMINI_MODEL_OPTIONS)
+            default_model = GEMINI_DEFAULT_MODEL
+            model_help = (
+                "gemini-2.5-flash 提供免費額度；gemini-2.5-pro 最強但無 free tier。"
+            )
+            api_key_url_hint = "👉 免費取得：https://aistudio.google.com/apikey"
+        else:
+            key_label = "🔑 OpenAI API Key"
+            key_placeholder = "sk-...（或設定於 .streamlit/secrets.toml）"
+            secret_name = OPENAI_API_KEY_SECRET_NAME
+            model_options = list(OPENAI_MODEL_OPTIONS)
+            default_model = OPENAI_DEFAULT_MODEL
+            model_help = "gpt-4o-mini 經濟快速；gpt-4o 回答最深入。"
+            api_key_url_hint = "👉 取得：https://platform.openai.com/api-keys"
+
         st.text_input(
-            "🔑 OpenAI API Key",
+            key_label,
             type="password",
-            placeholder="sk-...（或設定於 .streamlit/secrets.toml）",
-            help="不會儲存到伺服器，只在當前 session 使用。建議部署時改用 st.secrets。",
+            placeholder=key_placeholder,
+            help=f"不會儲存到伺服器，只在當前 session 使用。{api_key_url_hint}",
             key="ch9_api_key_input",
         )
 
@@ -62,10 +108,10 @@ def _render_sidebar_controls() -> tuple[AIConfig, float]:
         with col_m:
             model = st.selectbox(
                 "AI 模型",
-                options=list(OPENAI_MODEL_OPTIONS),
-                index=OPENAI_MODEL_OPTIONS.index(OPENAI_DEFAULT_MODEL),
-                help="gpt-4o-mini 經濟快速；gpt-4o 回答最深入。",
-                key="ch9_model",
+                options=model_options,
+                index=model_options.index(default_model),
+                help=model_help,
+                key="ch9_model_picker",  # provider 切換時自動重置
             )
         with col_t:
             temperature = st.slider(
@@ -84,7 +130,10 @@ def _render_sidebar_controls() -> tuple[AIConfig, float]:
             max_value=10.0,
             value=OPENAI_DEFAULT_SPEND_CAP_USD,
             step=0.10,
-            help="累積成本達上限後會自動鎖住輸入。設為 0 表示無上限。",
+            help=(
+                "累積成本達上限後會自動鎖住輸入。設為 0 表示無上限。"
+                "Gemini free tier 的成本顯示為『假設付費版』估算。"
+            ),
             key="ch9_spend_cap",
         )
 
@@ -98,12 +147,24 @@ def _render_sidebar_controls() -> tuple[AIConfig, float]:
                 st.session_state.ch9_usage_stats = UsageStats()
                 st.rerun()
 
+        # ----- Free tier 提示 -----
+        if provider == AIProvider.GEMINI and model in GEMINI_FREE_TIER_MODELS:
+            st.success(
+                f"🆓 **{model}** 屬於 Google AI Studio 免費額度範圍——"
+                "有 RPM / 日 token 上限但**不收費**。"
+            )
+
     api_key = resolve_api_key(
         st.session_state.get("ch9_api_key_input"),
-        OPENAI_API_KEY_SECRET_NAME,
+        secret_name,
     )
     return (
-        AIConfig(api_key=api_key or "", model=model, temperature=temperature),
+        AIConfig(
+            api_key=api_key or "",
+            model=model,
+            temperature=temperature,
+            provider=provider,
+        ),
         cap_usd,
     )
 
@@ -157,11 +218,14 @@ def render_chapter_9_ai() -> None:
     """🤖 學長 AI 實戰顧問（Chapter 9）— UI 入口。"""
     st.title("🤖 學長 AI 實戰顧問")
     st.caption(
-        "🛡️ 內建學長團隊鐵律 × OpenAI GPT 引擎｜"
+        "🛡️ 內建學長團隊鐵律 × Google Gemini ／ OpenAI GPT 雙引擎｜"
         "建商坑你的合約、房仲的話術、銀行不會講的眉角——**問就對了**。"
     )
 
     config, cap_usd = _render_sidebar_controls()
+    provider_display = (
+        "Gemini" if config.provider == AIProvider.GEMINI else "OpenAI"
+    )
 
     # ----- session_state 初始化 -----
     # Note: Streamlit's session_state attrs can't carry annotations directly
@@ -177,10 +241,17 @@ def render_chapter_9_ai() -> None:
 
     # ----- API Key 缺失警告 -----
     if not config.is_ready:
+        secret_name = (
+            GEMINI_API_KEY_SECRET_NAME if config.provider == AIProvider.GEMINI
+            else OPENAI_API_KEY_SECRET_NAME
+        )
+        placeholder = (
+            "AIzaSy-..." if config.provider == AIProvider.GEMINI else "sk-..."
+        )
         st.warning(
-            "🔑 **請先在上方設定區填入 OpenAI API Key**，或於部署環境設定 "
-            "`.streamlit/secrets.toml`：\n\n"
-            f"```toml\n{OPENAI_API_KEY_SECRET_NAME} = \"sk-...\"\n```"
+            f"🔑 **請先在上方設定區填入 {provider_display} API Key**，"
+            "或於部署環境設定 `.streamlit/secrets.toml`：\n\n"
+            f"```toml\n{secret_name} = \"{placeholder}\"\n```"
         )
 
     # ----- 成本累計顯示 -----
@@ -246,7 +317,10 @@ def render_chapter_9_ai() -> None:
         usage = getattr(stream, "usage", None)
         if usage is not None:
             st.session_state.ch9_usage_stats = accumulate_usage(
-                st.session_state.ch9_usage_stats, usage, config.model,
+                st.session_state.ch9_usage_stats,
+                usage,
+                config.model,
+                config.provider,
             )
     except Exception as exc:  # noqa: BLE001 — 對使用者轉譯任何 SDK 例外
         with st.chat_message("assistant", avatar="⚠️"):

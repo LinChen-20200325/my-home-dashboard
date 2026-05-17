@@ -171,3 +171,32 @@ OPENAI_DEFAULT_SPEND_CAP_USD: Final[float] = 1.00
 # 第 N 次重試延遲 = 2 ** N 秒 → 1s, 2s, 4s, 最差合計 ~7 秒。
 OPENAI_MAX_RETRIES: Final[int] = 3
 OPENAI_RETRY_BASE_DELAY_SECONDS: Final[float] = 1.0
+
+
+# ===== Gemini（Google AI Studio）— Ch.9 第二可選 provider =====
+# Free tier 提供 gemini-2.5-flash / 2.0-flash 等，預設選 2.5-flash 兼顧速度與品質。
+# 參考：https://ai.google.dev/gemini-api/docs/models
+GEMINI_MODEL_OPTIONS: Final[tuple[str, ...]] = (
+    "gemini-2.5-flash",          # 預設，free tier 可用、快速
+    "gemini-2.5-flash-lite",     # 更輕量、free tier 可用
+    "gemini-2.0-flash",          # 上一代 flash，仍維持 free tier
+    "gemini-2.5-pro",            # 最高品質（無 free tier）
+)
+GEMINI_DEFAULT_MODEL: Final[str] = "gemini-2.5-flash"
+GEMINI_API_KEY_SECRET_NAME: Final[str] = "GEMINI_API_KEY"
+
+# Gemini 各模型每百萬 tokens 的 USD 報價（2026 年公告 paid-tier 價，free tier 為 0）。
+# 用途：顯示『等同付費版會花多少』；free tier 用戶可視為估算上限。
+GEMINI_PRICING_USD_PER_MILLION_TOKENS: Final[dict[str, dict[str, float]]] = {
+    "gemini-2.5-flash":      {"input": 0.30, "output": 2.50},
+    "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
+    "gemini-2.0-flash":      {"input": 0.10, "output": 0.40},
+    "gemini-2.5-pro":        {"input": 1.25, "output": 10.00},
+}
+
+# Free tier 可用的模型集合（顯示時可用來標記「免費」徽章）。
+GEMINI_FREE_TIER_MODELS: Final[frozenset[str]] = frozenset({
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+})
