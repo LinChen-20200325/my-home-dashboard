@@ -135,6 +135,25 @@ class TestUsageTrackingStream:
         assert wrapped.usage.output_tokens == 0
         assert wrapped.usage.total_tokens == 0
 
+    def test_holds_strong_reference_to_client(self) -> None:
+        """genai.Client 必須被 UsageTrackingStream 強引用，避免 stream 還沒
+        讀完就被 GC 觸發 httpx 連線關閉。
+        """
+        # 模擬 client object（任意非 None 值都可）
+        fake_client = SimpleNamespace(close=lambda: None)
+        wrapped = UsageTrackingStream(
+            iter([_text_chunk("hi")]),
+            client_ref=fake_client,
+        )
+        # client_ref 屬性必須存在且指向同一個 client object
+        assert wrapped._client_ref is fake_client
+
+    def test_client_ref_optional_for_unit_tests(self) -> None:
+        """未傳 client_ref 仍能建構（unit test 場景不需要真的有 Client）。"""
+        wrapped = UsageTrackingStream(iter([_text_chunk("hi")]))
+        assert wrapped._client_ref is None
+        assert list(wrapped) == ["hi"]
+
 
 # ============================================================
 # _to_gemini_contents — system + role 重新映射

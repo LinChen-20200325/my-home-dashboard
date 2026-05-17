@@ -35,10 +35,20 @@ class UsageTrackingStream:
     Gemini chunk 形狀：``chunk.text`` 為片段文字；最後一個 chunk 帶
     ``chunk.usage_metadata`` 包含 prompt_token_count / candidates_token_count /
     total_token_count。本 class 在迭代過程中擷取並保留。
+
+    生命週期：``_client_ref`` 是 genai.Client 的強引用，避免 Client 提前被
+    GC 觸發 ``httpx`` 連線關閉（會導致 "Cannot send a request, as the client
+    has been closed"）。stream 迭代結束、UsageTrackingStream 被丟棄時 Client
+    才會被回收。
     """
 
-    def __init__(self, raw_stream: Iterator[Any]) -> None:
+    def __init__(
+        self,
+        raw_stream: Iterator[Any],
+        client_ref: Any = None,
+    ) -> None:
         self._raw = raw_stream
+        self._client_ref = client_ref
         self._usage: TokenUsage | None = None
 
     def __iter__(self) -> Iterator[str]:
@@ -144,7 +154,10 @@ def stream_chat_completion(
                 contents=contents,
                 config=gen_config,
             )
-            return UsageTrackingStream(raw_stream)
+            # 把 client 強引用一起塞進 wrapper，避免 stream 還沒讀完時 GC 把
+            # genai.Client 連帶 httpx 連線關掉 → "Cannot send a request, as
+            # the client has been closed"。
+            return UsageTrackingStream(raw_stream, client_ref=client)
         except retryable_exc as exc:
             last_exc = exc
             if attempt >= OPENAI_MAX_RETRIES:
