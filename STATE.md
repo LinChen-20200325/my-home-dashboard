@@ -6,8 +6,8 @@
 ---
 
 ## 階段狀態
-- [x] **Phase 1**：藍圖規劃 — _完成（commit pending）_
-- [ ] **Phase 2**：逐層解耦與搬遷 — _未啟動，等待『同意』_
+- [x] **Phase 1**：藍圖規劃 — _完成（commit `162cc0c`）_
+- [x] **Phase 2**：逐層解耦與搬遷 — **33 / 33 全部完成** ✅
 
 ---
 
@@ -129,7 +129,7 @@
 ### 🚀 G. Composition Root 與退役 [3 steps]
 - [x] **#31** 重寫 `main.py` — 只留 `st.set_page_config` + `router.run()`，從 71 行縮為 33 行 _(commit: Final PR)_
 - [x] **#32** 退役 `app.py` → `_legacy/app.py`（附 README 說明）— PMT 已在 #11 搬到 `services/mortgage.py` _(commit: Final PR)_
-- [ ] **#33**（可選）`tests/services/test_cashflow.py` — 第一支 pytest 單元測試，驗證 DTI / 淨現金流邊界條件
+- [x] **#33** `tests/services/test_cashflow.py` + `test_pricing.py` + `test_decision_engine.py` — 46 tests pass in 0.11s _(commit: Tests PR)_
 
 ---
 

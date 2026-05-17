@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Test runner（services / repositories pure-function 測試）
+pytest>=9.0
