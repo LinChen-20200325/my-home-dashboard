@@ -123,12 +123,12 @@
 - [x] **#28** `app/ui/pages/strategy_syndication.py` _(commit: Batch 2 PR)_
 
 ### 🧩 F. 共用元件與 Router [2 steps]
-- [ ] **#29** `app/ui/components/verdict.py` + `metric_grid.py` — 抽出重複的 verdict block / metric 群組
-- [ ] **#30** `app/ui/router.py` — 從 main.py 拆出 CHAPTERS dict + sidebar
+- [x] **#29** `app/ui/components/verdict.py` + `metric_grid.py` — 抽出重複的 verdict block / metric 群組 _(commit: Final PR)_
+- [x] **#30** `app/ui/router.py` — 從 main.py 拆出 CHAPTERS dict + sidebar _(commit: Final PR)_
 
 ### 🚀 G. Composition Root 與退役 [3 steps]
-- [ ] **#31** 重寫 `app/main.py` — 只留 `st.set_page_config` + `router.run()`；舊 `main.py` 改為 shim：`from app.main import *`
-- [ ] **#32** 退役 `app.py`（重命名為 `_legacy/app.py` 或移除）— 邏輯應已搬至 `services/mortgage.py`
+- [x] **#31** 重寫 `main.py` — 只留 `st.set_page_config` + `router.run()`，從 71 行縮為 33 行 _(commit: Final PR)_
+- [x] **#32** 退役 `app.py` → `_legacy/app.py`（附 README 說明）— PMT 已在 #11 搬到 `services/mortgage.py` _(commit: Final PR)_
 - [ ] **#33**（可選）`tests/services/test_cashflow.py` — 第一支 pytest 單元測試，驗證 DTI / 淨現金流邊界條件
 
 ---
