@@ -2,9 +2,9 @@
 
 > 14 個模組的 Streamlit 房地產投資攻略 APP — 從現金流診斷到 AI 顧問，學長心法全收錄。
 
+[![tests](https://github.com/CornCorn-2015/my-house-2026/actions/workflows/test.yml/badge.svg)](https://github.com/CornCorn-2015/my-house-2026/actions/workflows/test.yml)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-FF4B4B?logo=streamlit)](https://streamlit.io/)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python)](https://www.python.org/)
-[![pytest](https://img.shields.io/badge/tests-46%20passed-brightgreen?logo=pytest)](./tests/)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python)](https://www.python.org/)
 
 ---
 

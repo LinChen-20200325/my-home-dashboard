@@ -1,0 +1,65 @@
+name: tests
+
+# 觸發時機：
+#   - push 到 main（驗證合進去的是綠的）
+#   - 所有打開的 PR（merge 前驗證）
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一 PR 連續 push 時取消舊的執行，省 GH Actions 額度
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: pytest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Show installed package versions
+        run: pip freeze
+
+      - name: Run pytest
+        run: pytest --tb=short
+
+      - name: AST sanity check (all .py files parse)
+        run: |
+          python -c "
+          import ast, pathlib
+          fails = []
+          for p in pathlib.Path('.').rglob('*.py'):
+              if '_legacy' in p.parts or '__pycache__' in p.parts:
+                  continue
+              try:
+                  ast.parse(p.read_text())
+              except SyntaxError as e:
+                  fails.append(f'{p}: {e}')
+          if fails:
+              print('\n'.join(fails))
+              exit(1)
+          print(f'All Python files parse cleanly.')
+          "
