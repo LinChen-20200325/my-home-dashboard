@@ -51,6 +51,70 @@ def monthly_payment_from_annual(
 
 
 # ============================================================
+# 房價反推 / 月付推估（Ch.1 房貸試算）
+# ============================================================
+def monthly_payment_for_property(
+    property_price_ntd: float,
+    annual_rate: float,
+    years: int,
+    ltv_ratio: float,
+) -> float:
+    """給定房屋總價、利率、年限、貸款成數，回傳月付金（本息平均攤還）。
+
+    Args:
+        property_price_ntd: 房屋總價（元）
+        annual_rate:        年利率（小數，例 0.02 = 2%）
+        years:              貸款年期
+        ltv_ratio:          貸款成數（小數，例 0.80 = 80%）
+
+    Returns:
+        每月應繳金額（元）；退化情境（房價 / 年限 / 成數 ≤ 0）回 0.0。
+
+    注意：本函式不含寬限期；如需逐期含寬限，請呼叫 ``amortization_schedule``。
+    """
+    principal = property_price_ntd * ltv_ratio
+    return monthly_payment_from_annual(annual_rate, years, principal)
+
+
+def max_affordable_property_price(
+    available_monthly_ntd: float,
+    annual_rate: float,
+    years: int,
+    ltv_ratio: float,
+) -> float:
+    """以可承擔的月付金反推最大可買房屋總價（PMT 反推）。
+
+    公式（PMT 倒推本金）：
+        principal = PMT × (factor - 1) / (r × factor)
+            其中 factor = (1 + r)^n, r = annual_rate / 12, n = years × 12
+        房價 = principal / ltv_ratio
+
+    退化情境：
+        available_monthly ≤ 0 或 years ≤ 0 或 ltv_ratio ≤ 0 → 0.0
+        annual_rate ≤ 0 → principal = available × n（線性退化）
+
+    Args:
+        available_monthly_ntd: 扣除其他負債後，可用來繳房貸的月金額（元）
+        annual_rate:           年利率（小數）
+        years:                 貸款年期
+        ltv_ratio:             貸款成數（小數）
+
+    Returns:
+        最大可買房屋總價（元）。
+    """
+    if available_monthly_ntd <= 0 or years <= 0 or ltv_ratio <= 0:
+        return 0.0
+    monthly_rate = annual_rate / 12
+    n = years * 12
+    if monthly_rate <= 0:
+        principal = available_monthly_ntd * n
+    else:
+        factor = (1 + monthly_rate) ** n
+        principal = available_monthly_ntd * (factor - 1) / (monthly_rate * factor)
+    return principal / ltv_ratio
+
+
+# ============================================================
 # 攤還表（含寬限期）
 # ============================================================
 @dataclass(frozen=True)

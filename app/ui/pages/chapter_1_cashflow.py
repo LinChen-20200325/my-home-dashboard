@@ -22,6 +22,10 @@ from app.models.constants import (
 )
 from app.services.cashflow import LOW_BUFFER_THRESHOLD_NTD, diagnose_cashflow
 from app.services.leverage import simulate_m2_decade
+from app.services.mortgage import (
+    max_affordable_property_price,
+    monthly_payment_for_property,
+)
 from app.ui.components.metric_grid import render_metric_row
 
 # Cross-chapter navigation helpers 透過 function-level import 引入，
@@ -201,6 +205,149 @@ def _render_cashflow_tab() -> None:
         with col_nav_b:
             _jump("🏦 去 Ch.4 拗增貸 →", CHAPTER_KEY_CH4,
                   button_key="ch1_jump_ch4", use_container_width=True)
+
+    # ---------- 房貸月付試算（接續 DTI 診斷）----------
+    _render_mortgage_planner(
+        total_income_ntd=int(total_income),
+        existing_total_debt_ntd=snapshot.total_debt_ntd,
+    )
+
+
+def _render_mortgage_planner(
+    *,
+    total_income_ntd: int,
+    existing_total_debt_ntd: int,
+) -> None:
+    """房貸月付試算：給定利率/年限/成數，三種視角看『買得起多少』。
+
+    區塊 A：輸入目標房價 → 月付 + 加上後的新 DTI
+    區塊 B：500/1000/.../5000 萬各級的月付一覽
+    區塊 C：以 DTI 60% / 70% 上限反推可買房屋總價
+    """
+    st.markdown("---")
+    st.subheader("🏦 房貸月付試算")
+    st.caption("學長：『月付不能憑感覺，先算清楚再去看物件——不然下訂金那一刻才哭就晚了。』")
+
+    col_r, col_y, col_l = st.columns(3)
+    with col_r:
+        annual_rate_pct = st.number_input(
+            "年利率 (%)",
+            min_value=0.0,
+            max_value=10.0,
+            value=2.0,
+            step=0.1,
+            help="台灣首購一般 1.8-2.2%；信用差／高成數會被加碼。",
+            key="ch1_mortgage_rate_pct",
+        )
+    with col_y:
+        years = st.number_input(
+            "貸款年限",
+            min_value=5,
+            max_value=40,
+            value=30,
+            step=1,
+            help="銀行最長一般為 30 年；40 年期需符合年齡條件。",
+            key="ch1_mortgage_years",
+        )
+    with col_l:
+        ltv_pct = st.number_input(
+            "貸款成數 (%)",
+            min_value=10,
+            max_value=100,
+            value=80,
+            step=5,
+            help="首購自住 8-9 成；投資／第二屋一般 6-7 成。",
+            key="ch1_mortgage_ltv_pct",
+        )
+
+    rate = float(annual_rate_pct) / 100
+    ltv = float(ltv_pct) / 100
+    years_int = int(years)
+
+    # ---------- 區塊 A：想買的房 → 月付 + 新 DTI ----------
+    st.markdown("##### A. 想買的房 → 月付與『加上後的 DTI』")
+    target_price_wan = st.number_input(
+        "目標房屋總價（萬）",
+        min_value=0,
+        value=1_000,
+        step=100,
+        help="輸入想看的物件總價，學長馬上幫你算月付與 DTI 衝擊。",
+        key="ch1_target_price_wan",
+    )
+    target_price_ntd = int(target_price_wan) * 10_000
+    new_monthly = monthly_payment_for_property(target_price_ntd, rate, years_int, ltv)
+    projected_total_debt = existing_total_debt_ntd + new_monthly
+    if total_income_ntd > 0:
+        projected_dti: float = projected_total_debt / total_income_ntd
+    else:
+        projected_dti = float("inf")
+
+    col_a1, col_a2, col_a3 = st.columns(3)
+    col_a1.metric("貸款本金", f"{(target_price_ntd * ltv) / 10_000:,.0f} 萬")
+    col_a2.metric("每月房貸", f"{new_monthly:,.0f} 元")
+    if math.isinf(projected_dti):
+        col_a3.metric("加上房貸後 DTI", "—")
+    else:
+        col_a3.metric(
+            "加上房貸後 DTI",
+            f"{projected_dti * 100:.1f} %",
+            delta=f"{(projected_dti - DTI_DANGER_RATIO) * 100:+.1f} pp vs 70%",
+            delta_color="inverse",
+        )
+
+    if not math.isinf(projected_dti) and projected_dti > DTI_DANGER_RATIO:
+        st.error(
+            f"🚫 加上此房貸後 DTI = **{projected_dti * 100:.1f}%** > 70%，"
+            "已踩到銀行核貸死線——這筆貸款不會批，或會被大砍成數／加碼利率。"
+        )
+
+    # ---------- 區塊 B：各總價對應月付 ----------
+    st.markdown("##### B. 不同總價對應的月付（同一利率／年限／成數）")
+    price_grid_wan = (500, 1_000, 1_500, 2_000, 3_000, 5_000)
+    grid_rows = []
+    for p_wan in price_grid_wan:
+        pay = monthly_payment_for_property(p_wan * 10_000, rate, years_int, ltv)
+        grid_rows.append({
+            "房屋總價": f"{p_wan:,} 萬",
+            "貸款本金": f"{p_wan * ltv:,.0f} 萬",
+            "每月月付": f"{pay:,.0f} 元",
+            "每 100 萬房": f"{pay / p_wan:,.0f} 元",
+        })
+    st.dataframe(grid_rows, hide_index=True, use_container_width=True)
+
+    # ---------- 區塊 C：以 DTI 上限反推可買房價 ----------
+    st.markdown("##### C. 以你的收入能買多少？（反向試算）")
+    if total_income_ntd <= 0:
+        st.caption("收入為 0，無法反推可買房價。")
+        return
+
+    col_c1, col_c2 = st.columns(2)
+    for col, dti_limit, label, caption in (
+        (col_c1, 0.60, "DTI 60%（安全水位）",
+         "學長建議的安全線，留有餘裕應對升息／空租。"),
+        (col_c2, DTI_DANGER_RATIO, "DTI 70%（銀行死線）",
+         "銀行核貸的硬上限，貸滿這條線等於把現金流逼到極限。"),
+    ):
+        available_for_mortgage = max(
+            total_income_ntd * dti_limit - existing_total_debt_ntd, 0.0
+        )
+        max_price_ntd = max_affordable_property_price(
+            available_for_mortgage, rate, years_int, ltv,
+        )
+        with col:
+            st.metric(
+                label,
+                f"{max_price_ntd / 10_000:,.0f} 萬" if max_price_ntd > 0 else "0 萬",
+                delta=f"可承擔月付 {available_for_mortgage:,.0f} 元",
+                delta_color="off",
+                help=caption,
+            )
+
+    if existing_total_debt_ntd > 0:
+        st.caption(
+            f"💡 已扣除你輸入的『每月總負債 {existing_total_debt_ntd:,.0f} 元』，"
+            "若把壞債清掉，可買房價上限會明顯拉高。"
+        )
 
 
 def _render_m2_tab() -> None:
