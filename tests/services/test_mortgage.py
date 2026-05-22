@@ -10,6 +10,8 @@ import pytest
 from app.services.mortgage import (
     AmortizationRow,
     amortization_schedule,
+    max_affordable_property_price,
+    monthly_payment_for_property,
     monthly_payment_from_annual,
     pmt,
 )
@@ -125,3 +127,65 @@ class TestAmortizationRowShape:
         row = amortization_schedule(1_000_000, 0.02, 1)[0]
         with pytest.raises((AttributeError, Exception)):
             row.payment = 99999  # type: ignore[misc]
+
+
+# ============================================================
+# monthly_payment_for_property / max_affordable_property_price
+# ============================================================
+class TestMonthlyPaymentForProperty:
+    """房價 × 成數 → 本金 → 月付金的封裝。"""
+
+    def test_1000wan_house_80_ltv_2pct_30y(self) -> None:
+        """1000 萬房 / 80% 貸 / 2% / 30y → 月付約 29,569.56（Excel PMT 對齊）。"""
+        mp = monthly_payment_for_property(10_000_000, 0.02, 30, 0.80)
+        assert mp == pytest.approx(29_569.56, abs=0.01)
+
+    def test_zero_price_returns_zero(self) -> None:
+        assert monthly_payment_for_property(0, 0.02, 30, 0.80) == 0.0
+
+    def test_zero_ltv_returns_zero(self) -> None:
+        """成數 0 → 本金 0 → 月付 0。"""
+        assert monthly_payment_for_property(10_000_000, 0.02, 30, 0.0) == 0.0
+
+    def test_scales_linearly_with_price(self) -> None:
+        """房價翻倍、其他不變 → 月付翻倍。"""
+        small = monthly_payment_for_property(5_000_000, 0.02, 30, 0.80)
+        big = monthly_payment_for_property(10_000_000, 0.02, 30, 0.80)
+        assert big == pytest.approx(small * 2, abs=0.01)
+
+
+class TestMaxAffordablePropertyPrice:
+    """PMT 反推：可承擔月付 → 最大可買房價。"""
+
+    def test_round_trip_with_monthly_payment(self) -> None:
+        """先正算月付、再反推房價，應約等於原房價。"""
+        original_price = 10_000_000
+        monthly = monthly_payment_for_property(original_price, 0.02, 30, 0.80)
+        recovered = max_affordable_property_price(monthly, 0.02, 30, 0.80)
+        assert recovered == pytest.approx(original_price, rel=1e-6)
+
+    def test_zero_available_monthly_returns_zero(self) -> None:
+        assert max_affordable_property_price(0, 0.02, 30, 0.80) == 0.0
+
+    def test_negative_available_monthly_returns_zero(self) -> None:
+        """負可承擔（其他負債已吃光收入）→ 不可買。"""
+        assert max_affordable_property_price(-10_000, 0.02, 30, 0.80) == 0.0
+
+    def test_zero_ltv_returns_zero(self) -> None:
+        assert max_affordable_property_price(30_000, 0.02, 30, 0.0) == 0.0
+
+    def test_zero_years_returns_zero(self) -> None:
+        assert max_affordable_property_price(30_000, 0.02, 0, 0.80) == 0.0
+
+    def test_zero_rate_linear_degrade(self) -> None:
+        """0 利率退化：principal = monthly × n。"""
+        # 月付 5000、年限 10y、成數 100% → principal = 5000 × 120 = 600,000 → 房價 = 600,000
+        result = max_affordable_property_price(5_000, 0.0, 10, 1.0)
+        assert result == pytest.approx(600_000)
+
+    @pytest.mark.boundary
+    def test_higher_rate_means_lower_affordable_price(self) -> None:
+        """利率愈高，相同月付能買的房愈少。"""
+        cheap_rate = max_affordable_property_price(30_000, 0.015, 30, 0.80)
+        expensive_rate = max_affordable_property_price(30_000, 0.030, 30, 0.80)
+        assert cheap_rate > expensive_rate
